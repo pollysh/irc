@@ -9,37 +9,58 @@
 #include <poll.h>
 #include <map>
 #include <sstream>
+#include "Server.hpp"
 
 #define MAX_CLIENTS 1024
 
 using namespace std;
-
-map<int, string> clientNicknames; // Map to associate client FDs with nicknames
 
 int setNonBlocking(int fd) {
     int flags;
     if ((flags = fcntl(fd, F_GETFL, 0)) == -1) flags = 0;
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
-
-void processCommand(int clientFd, const string& command) {
-    istringstream iss(command);
-    string cmd;
+void Server::processCommand(int clientFd, const std::string& command) {
+    std::istringstream iss(command);
+    std::string cmd;
     iss >> cmd; // Extract the command itself
 
     if (cmd == "NICK") {
-        string nickname;
+        std::string nickname;
         iss >> nickname; // Extract the nickname
         if (!nickname.empty()) {
             clientNicknames[clientFd] = nickname; // Update the client's nickname
-            cout << "Client " << clientFd << " sets nickname to " << nickname << endl;
+            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
             // Optionally, send a confirmation message back to the client
         }
+    } else if (cmd == "USER") {
+        std::string username;
+        iss >> username; // Extract the username
+        if (!username.empty()) {
+            // Assuming you have a way to store usernames similarly to nicknames
+            clientUsernames[clientFd] = username; // Update the client's username
+            std::cout << "Client " << clientFd << " sets username to " << username << std::endl;
+            // Optionally, send a confirmation message back to the client
+        }
+    } else if (cmd == "JOIN") {
+        std::string channel;
+        iss >> channel; // Extract the channel name
+        if (!channel.empty()) {
+            // Add the client to the channel
+            // Ensure you have a data structure to track which clients are in which channels
+            channels[channel].push_back(clientFd);
+            std::cout << "Client " << clientFd << " joined channel " << channel << std::endl;
+            // Optionally, notify other clients in the channel or send a confirmation back
+        }
+    } else if (cmd == "JOIN") {
+        
+    
     }
-    // Additional commands can be handled here in a similar manner
+    // Handle other commands (e.g., PRIVMSG) in a similar manner...
 }
 
 int main(int argc, char *argv[]) {
+    Server server;
     if (argc != 3) {
         cout << "Usage: ./ircserv <port> <password>" << endl;
         return 1;
@@ -79,7 +100,6 @@ int main(int argc, char *argv[]) {
 
     while (true) {
         activity = poll(fds, nfds, -1);
-
         if (activity < 0) {
             cerr << "Poll error." << endl;
             continue;
@@ -116,6 +136,7 @@ int main(int argc, char *argv[]) {
         }
 
         for (int i = 1; i < nfds; i++) {
+            server.processCommand(fds[i].fd, string(buffer));
             if (fds[i].revents & POLLIN) {
                 memset(buffer, 0, 1024);
                 int nbytes = recv(fds[i].fd, buffer, 1024, 0);
@@ -133,7 +154,7 @@ int main(int argc, char *argv[]) {
                 } else {
                     buffer[nbytes] = '\0';
                     cout << "Message from client " << fds[i].fd << ": " << buffer << endl;
-                    processCommand(fds[i].fd, string(buffer));
+                    server.processCommand(fds[i].fd, string(buffer));
                 }
             }
         }

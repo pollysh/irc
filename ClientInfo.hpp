@@ -7,6 +7,7 @@ using std::string;
 
 struct ClientInfo {
     string nickname;
+    string username;
     // Add other attributes here as needed
 };
 
