@@ -3,6 +3,7 @@
 #include <string>
 #include "ClientInfo.hpp"
 
+
 class Server {
 private:
     std::map<int, ClientInfo> clients;
@@ -21,5 +22,6 @@ public:
     void joinCmd(int clientFd, const std::vector<std::string>& args);
     void privMsgCmd(int clientFd, const std::vector<std::string>& args);
     void processCommand(int clientFd, const std::string& command);
+    void sendMessage(int clientFd, const std::string& message);
     // Other methods...
 };

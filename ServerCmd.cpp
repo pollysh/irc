@@ -2,6 +2,7 @@
 #include "Server.hpp"
 #include <sstream>
 #include <vector>
+#include <sys/socket.h>
 
 Server::Server() {
     registerCommandHandlers();
@@ -51,11 +52,54 @@ void Server::joinCmd(int clientFd, const std::vector<std::string>& args) {
     }
 }
 
-void Server::privMsgCmd(int clientFd, const std::vector<std::string>& args) {
-    if (args.size() >= 2) {
-        // args[0] is the target (username or channel), args[1] is the message
-        string target = args[0];
-        string message = args[1];
-        // Implement logic to send a private message either to a user or broadcast in a channel
+void Server::sendMessage(int clientFd, const std::string& message) {
+    // Simple wrapper around send to include error handling for C++98
+    if (send(clientFd, message.c_str(), message.length(), 0) == -1) {
+        // Handle send error, such as logging or queuing for retry
     }
 }
+
+void Server::privMsgCmd(int clientFd, const std::vector<std::string>& args) {
+    if (args.size() < 2) {
+        // Not enough arguments provided for PRIVMSG
+        return;
+    }
+
+    const std::string& target = args[0];
+    // Concatenate all elements after args[0] to form the complete message
+    std::string message;
+    for (size_t i = 1; i < args.size(); ++i) {
+        message += args[i];
+        if (i < args.size() - 1) {
+            message += " "; // Add space between words, but not after the last word
+        }
+    }
+
+    if (target[0] == '#') { // Target is a channel
+        if (channels.find(target) != channels.end()) {
+            for (std::vector<int>::const_iterator it = channels[target].begin(); it != channels[target].end(); ++it) {
+                int memberFd = *it;
+                if (memberFd != clientFd) { // Skip sender
+                    // Assuming you have a function to wrap the send call and handle errors
+                    sendMessage(memberFd, message);
+                }
+            }
+        } else {
+            // Optionally, inform the sender that the channel does not exist
+        }
+    } else { // Target is assumed to be a username
+        bool userFound = false;
+        for (std::map<int, std::string>::const_iterator it = clientUsernames.begin(); it != clientUsernames.end(); ++it) {
+            if (it->second == target) {
+                userFound = true;
+                sendMessage(it->first, message); // Send message
+                break;
+            }
+        }
+        if (!userFound) {
+            // Optionally, inform the sender that the user does not exist
+        }
+    }
+}
+
+

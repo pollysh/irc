@@ -46,17 +46,30 @@ void Server::processCommand(int clientFd, const std::string& command) {
         std::string channel;
         iss >> channel; // Extract the channel name
         if (!channel.empty()) {
-            // Add the client to the channel
-            // Ensure you have a data structure to track which clients are in which channels
             channels[channel].push_back(clientFd);
             std::cout << "Client " << clientFd << " joined channel " << channel << std::endl;
-            // Optionally, notify other clients in the channel or send a confirmation back
         }
-    } else if (cmd == "JOIN") {
-        
-    
-    }
-    // Handle other commands (e.g., PRIVMSG) in a similar manner...
+    } else if (cmd == "PRIVMSG") {
+        std::string target;
+        iss >> target; // Extract the target (either a username or a channel)
+
+    // Skip the space between the target and the message
+        iss.ignore();
+
+        std::string message;
+        std::getline(iss, message); // Get the rest of the line as the message
+
+        if (!target.empty() && !message.empty()) {
+            // Prepare arguments vector for privMsgCmd
+            std::vector<std::string> args;
+            args.push_back(target); // First argument is the target
+            args.push_back(message); // Second argument is the message
+
+            // Call privMsgCmd with the correct parameters
+            privMsgCmd(clientFd, args);
+            }
+        }
+        // Handle other commands (e.g., PRIVMSG) in a similar manner...
 }
 
 int main(int argc, char *argv[]) {
