@@ -25,6 +25,42 @@ void Server::broadcastMessage(const std::string& channelName, const std::string&
     }
 }
 
+void Server::topicCmd(int clientFd, const std::string& channel, const std::string& topic) {
+    // Check if the channel exists
+    if (channels.find(channel) == channels.end()) {
+        sendMessage(clientFd, "Error: The specified channel does not exist.");
+        return;
+    }
+
+    // Check if the client is a member of the channel
+    std::vector<int>& clients = channels[channel];
+    if (std::find(clients.begin(), clients.end(), clientFd) == clients.end()) {
+        sendMessage(clientFd, "Error: You are not a member of the specified channel.");
+        return;
+    }
+
+    // If no topic argument is provided, display the current topic
+    if (topic.empty()) {
+        std::string currentTopic = channelTopics[channel];
+        if (currentTopic.empty()) {
+            sendMessage(clientFd, "No topic is set for " + channel + ".");
+        } else {
+            sendMessage(clientFd, "Current topic for " + channel + ": " + currentTopic);
+        }
+    } else {
+        // Check if the client is the channel operator
+        if (channelOperators.find(channel) != channelOperators.end() && channelOperators[channel] == clientFd) {
+            // Update the channel's topic
+            channelTopics[channel] = topic;
+            sendMessage(clientFd, "Topic for " + channel + " updated to: " + topic);
+            // Optionally, notify all channel members about the topic change
+            broadcastMessage(channel, "The topic for " + channel + " has been changed to: " + topic);
+        } else {
+            sendMessage(clientFd, "Error: Only the channel operator can change the topic.");
+        }
+    }
+}
+
 void Server::joinChannel(int clientFd, const std::string& channelName) {
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
         std::cerr << "Client " << clientFd << " attempted to join a channel without setting a nickname." << std::endl;
@@ -72,8 +108,12 @@ void Server::joinChannel(int clientFd, const std::string& channelName) {
     }
 }
 
-void Server::kickCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
-    // Check if clientFd is the operator of the channel
+void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
+    if (channels.find(channel) == channels.end()) {
+        sendMessage(clientFd, "Error: The specified channel does not exist.");
+        return;
+    }
+
     if (channelOperators.find(channel) != channelOperators.end() && channelOperators[channel] == clientFd) {
         // The user issuing the command is the channel operator
         // Now find the target user's file descriptor (fd) based on the nickname
@@ -90,7 +130,37 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
             return;
         }
 
-        // Check if the target user is in the channel
+        // Check if the target user is already in the channel
+        std::vector<int>& clients = channels[channel];
+        if (std::find(clients.begin(), clients.end(), targetFd) != clients.end()) {
+            sendMessage(clientFd, "Error: User already in the channel.");
+            return;
+        }
+
+        // Invite the user to the channel
+        sendMessage(targetFd, "You have been invited to join " + channel + ". Use JOIN command to enter.");
+        sendMessage(clientFd, "Invitation sent to " + targetNickname + ".");
+    } else {
+        // The user issuing the command is not the channel operator
+        sendMessage(clientFd, "Error: Only the channel operator can invite users.");
+    }
+}
+
+void Server::kickCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
+    if (channelOperators.find(channel) != channelOperators.end() && channelOperators[channel] == clientFd) {
+        int targetFd = -1;
+        for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+            if (it->second == targetNickname) {
+                targetFd = it->first;
+                break;
+            }
+        }
+        
+        if (targetFd == -1) {
+            sendMessage(clientFd, "Error: User not found.");
+            return;
+        }
+
         std::vector<int>& clients = channels[channel];
         if (std::find(clients.begin(), clients.end(), targetFd) != clients.end()) {
             // Remove the user from the channel
@@ -161,6 +231,29 @@ void Server::processCommand(int clientFd, const std::string& command) {
         } else {
             sendMessage(clientFd, "Error: KICK command requires a channel and a user nickname.");
         }
+    } else if (cmd == "INVITE")
+    {
+        std::string channel, targetNickname;
+        iss >> channel >> targetNickname; // Extract channel name and nickname from the command
+        if (!channel.empty() && !targetNickname.empty()) {
+            inviteCmd(clientFd, channel, targetNickname); // Call inviteCmd with extracted arguments
+        } else {
+            sendMessage(clientFd, "Error: INVITE command requires a channel and a user nickname.");
+        }
+    } else if (cmd == "TOPIC")
+    {
+        std::string channel;
+        std::string newTopic;
+        iss >> channel;
+        std::getline(iss, newTopic); // Use getline to allow spaces in the topic
+        if (!channel.empty()) {
+            if (!newTopic.empty()) {
+                newTopic = newTopic.substr(1); // Remove the leading space
+            }
+            topicCmd(clientFd, channel, newTopic);
+        } else {
+            sendMessage(clientFd, "Error: TOPIC command requires a channel name.");
+        }
     }
 }
 
@@ -186,7 +279,7 @@ void Server::processClientMessage(int clientFd, const std::string& message) {
     iss >> firstWord;
 
     // Check if the first word is a recognized command
-    if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER" || firstWord == "KICK") {
+    if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER" || firstWord == "KICK" || firstWord == "INVITE" || firstWord == "TOPIC") {
         // Process known commands
         processCommand(clientFd, message);
     } else {

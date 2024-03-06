@@ -24,6 +24,7 @@ private:
     std::string serverPassword;
     struct pollfd fds[MAX_CLIENTS];
     int nfds; 
+    std::map<std::string, std::string> channelTopics;
 
 public:
     Server();
@@ -45,5 +46,6 @@ public:
     int setNonBlocking(int fd);
     void run();
     void kickCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
-    // Other methods...
+    void inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
+    void topicCmd(int clientFd, const std::string& channel, const std::string& topic);
 };
