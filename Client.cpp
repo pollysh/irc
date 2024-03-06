@@ -6,6 +6,8 @@
 #include <arpa/inet.h>
 #include <unistd.h> // For close
 
+#define BUFFER_SIZE 1024
+
 using namespace std;
 
 int main(int argc, char *argv[]) {

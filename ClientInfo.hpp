@@ -8,6 +8,7 @@ using std::string;
 struct ClientInfo {
     string nickname;
     string username;
+    std::string lastChannelJoined;
     // Add other attributes here as needed
 };
 

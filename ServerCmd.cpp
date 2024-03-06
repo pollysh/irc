@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include <sys/socket.h>
+#include <iostream>
 
 Server::Server() {
     registerCommandHandlers();
@@ -53,11 +54,13 @@ void Server::joinCmd(int clientFd, const std::vector<std::string>& args) {
 }
 
 void Server::sendMessage(int clientFd, const std::string& message) {
-    // Simple wrapper around send to include error handling for C++98
-    if (send(clientFd, message.c_str(), message.length(), 0) == -1) {
-        // Handle send error, such as logging or queuing for retry
+    std::string formattedMessage = message + "\n"; // Append a newline character to ensure it's on a new line
+    // Send the formatted message in one go
+    if (send(clientFd, formattedMessage.c_str(), formattedMessage.length(), 0) == -1) {
+        std::cerr << "Failed to send message to client " << clientFd << ": " << strerror(errno) << std::endl;
     }
 }
+
 
 void Server::privMsgCmd(int clientFd, const std::vector<std::string>& args) {
     if (args.size() < 2) {
