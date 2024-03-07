@@ -29,6 +29,7 @@ private:
     std::map<std::string, bool> channelOperatorRestrictions; 
     std::map<std::string, std::string> channelPasswords;
     std::map<std::string, int> channelUserLimits;
+    std::map<int, bool> clientAuthenticated;
 
 public:
     Server();

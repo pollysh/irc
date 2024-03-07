@@ -411,19 +411,30 @@ void Server::processClientMessage(int clientFd, const std::string& message) {
     std::string firstWord;
     iss >> firstWord;
 
-    // Check if the first word is a recognized command
-    if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER" || firstWord == "KICK" || firstWord == "INVITE" || firstWord == "TOPIC" || firstWord == "MODE") {
-        // Process known commands
-        processCommand(clientFd, message);
-    } else {
-        // Before sending a message to the last joined channel, check if the client has joined any channel
-        if (clientLastChannel.find(clientFd) != clientLastChannel.end() && !clientLastChannel[clientFd].empty()) {
-            // Send the message to the last channel the client has joined
-            sendMessageToChannel(clientFd, clientLastChannel[clientFd], message);
+    // Handle the PASS command separately for authentication
+    if (firstWord == "PASS") {
+        std::string providedPassword;
+        iss >> providedPassword;
+        if (providedPassword == serverPassword) {
+            clientAuthenticated[clientFd] = true;
+            sendMessage(clientFd, "Password accepted. You are now authenticated.");
+            return; // Early return to avoid further processing
         } else {
-            // If the client hasn't joined any channel, notify them
-            sendMessage(clientFd, "You haven't joined any channel.\n");
+            sendMessage(clientFd, "Incorrect password. Please try again.");
+            // Consider disconnecting the client or give multiple attempts
+            return;
         }
+    }
+
+    // Ensure the client is authenticated before processing any other command
+    if (!clientAuthenticated[clientFd]) {
+        sendMessage(clientFd, "Please authenticate with the PASS command.");
+        return; // Block further command processing until authenticated
+    }
+
+    // Process other commands only if authenticated
+    if (clientAuthenticated[clientFd]) {
+        // Existing command processing logic...
     }
 }
 
@@ -475,7 +486,9 @@ void Server::acceptNewConnection() {
         std::cerr << "Error accepting new connection." << std::endl;
         return;
     }
-
+    
+    clientAuthenticated[new_socket] = false; // Mark new clients as unauthenticated
+    
     if (setNonBlocking(new_socket) < 0) {
         std::cerr << "Error setting new socket to non-blocking." << std::endl;
         close(new_socket);
@@ -505,17 +518,26 @@ void Server::run() {
     }
 }
 
-void Server::processConnections() {
-    for (int i = 1; i < nfds; i++) {
-        if (fds[i].revents & POLLIN) {
+void Server::processConnections() 
+{
+    for (int i = 1; i < nfds; i++) 
+    {
+        if (fds[i].revents & POLLIN) 
+        {
             char buffer[BUFFER_SIZE] = {0};
             ssize_t nbytes = recv(fds[i].fd, buffer, BUFFER_SIZE - 1, 0);
 
-            if (nbytes > 0) {
+            if (nbytes > 0) 
+            {
                 processClientMessage(fds[i].fd, std::string(buffer));
-            } else if (nbytes == 0) {
+            } else if (nbytes == 0) 
+            {
                 std::cout << "Client disconnected." << std::endl;
                 close(fds[i].fd);
+
+                // Clean up authentication status and any other client-specific data
+                clientAuthenticated.erase(fds[i].fd);
+
                 fds[i] = fds[--nfds]; // Adjust for removal
             } else {
                 std::cerr << "Error on recv." << std::endl;
