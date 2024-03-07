@@ -25,6 +25,57 @@ void Server::broadcastMessage(const std::string& channelName, const std::string&
     }
 }
 
+void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password) {
+    // Existing checks for channel existence and operator status...
+
+    if (mode == "i") {
+        channelInviteOnly[channel] = set;
+        std::string modeStatus = set ? "enabled" : "disabled";
+        sendMessage(clientFd, "Invite-only mode for " + channel + " has been " + modeStatus + ".");
+        
+        // Notify all channel members about the mode change
+        broadcastMessage(channel, "The channel " + channel + " is now in invite-only mode: " + modeStatus);
+    } else if (mode == "t") {
+        // Handle operator restrictions mode
+        channelOperatorRestrictions[channel] = set;
+        std::string status = set ? "enabled" : "disabled";
+        sendMessage(clientFd, "Operator restrictions for " + channel + " are now " + status + ".");
+        broadcastMessage(channel, "The channel " + channel + " now has operator restrictions " + status + ".");
+    } else if (mode == "k") {
+        // Handle setting or removing the channel password
+        if (set && !password.empty()) {
+            // Set the channel password
+            channelPasswords[channel] = password;
+            sendMessage(clientFd, "Password for " + channel + " has been set.");
+            broadcastMessage(channel, "A password is now required to join " + channel + ".");
+        } else if (!set) {
+            // Remove the channel password
+            channelPasswords.erase(channel);
+            sendMessage(clientFd, "Password for " + channel + " has been removed.");
+            broadcastMessage(channel, channel + " no longer requires a password to join.");
+        } else {
+            sendMessage(clientFd, "Error: A password is required to set the channel key.");
+        }
+    } else if (mode == "l") {
+        if (set) {
+            try {
+                int limit = std::stoi(password); // Treat the password string as the limit for the 'l' mode
+                channelUserLimits[channel] = limit;
+                sendMessage(clientFd, "User limit for " + channel + " has been set to " + std::to_string(limit) + ".");
+            } catch (const std::invalid_argument& ia) {
+                sendMessage(clientFd, "Error: Invalid user limit provided.");
+            } catch (const std::out_of_range& oor) {
+                sendMessage(clientFd, "Error: User limit is out of range.");
+            }
+        } else {
+            channelUserLimits.erase(channel);
+            sendMessage(clientFd, "User limit for " + channel + " has been removed.");
+        }
+    } else {
+        sendMessage(clientFd, "Error: Unsupported mode.");
+    }
+}
+
 void Server::topicCmd(int clientFd, const std::string& channel, const std::string& topic) {
     // Check if the channel exists
     if (channels.find(channel) == channels.end()) {
@@ -61,11 +112,28 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
     }
 }
 
-void Server::joinChannel(int clientFd, const std::string& channelName) {
+void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
         std::cerr << "Client " << clientFd << " attempted to join a channel without setting a nickname." << std::endl;
         sendMessage(clientFd, "You must set a nickname before joining a channel.");
         return;
+    }
+
+    if (channelPasswords.find(channelName) != channelPasswords.end()) {
+        if (channelPasswords[channelName] != password) {
+            sendMessage(clientFd, "Error: Incorrect password for " + channelName + ". Please provide the correct password.");
+            return;
+        }
+    }
+
+    if (channels.find(channelName) != channels.end()) {
+        std::vector<int>& clients = channels[channelName];
+        
+        // Check if a user limit is set and reached
+        if (channelUserLimits.find(channelName) != channelUserLimits.end() && clients.size() >= channelUserLimits[channelName]) {
+            sendMessage(clientFd, "Error: User limit for " + channelName + " has been reached.");
+            return;
+        }
     }
 
     if (channelName.empty() || channelName[0] != '#') {
@@ -74,7 +142,6 @@ void Server::joinChannel(int clientFd, const std::string& channelName) {
         return;
     }
     
-    // Check if the channel exists, if not, create it
     if (channels.find(channelName) == channels.end()) {
         channels[channelName] = std::vector<int>();
     } else {
@@ -93,7 +160,7 @@ void Server::joinChannel(int clientFd, const std::string& channelName) {
     std::cout << "Client " << clientFd << " with nickname " << clientNicknames[clientFd] << " joined channel " << channelName << std::endl;
     sendMessage(clientFd, "Welcome to " + channelName + "!");
 
-    // If this is the first client to join the channel, make them the operator
+    
     if (channels[channelName].size() == 1) {
         channelOperators[channelName] = clientFd;
         sendMessage(clientFd, "You are the operator of " + channelName + ".");
@@ -199,8 +266,18 @@ void Server::processCommand(int clientFd, const std::string& command) {
         }
     } else if (cmd == "JOIN") {
         std::string channel;
+        std::string password = ""; // Initialize password as empty
         iss >> channel;
-        joinChannel(clientFd, channel);
+
+    // Check if there's more input (potential password)
+        if (!iss.eof()) {
+            std::getline(iss, password);
+        // Remove the leading space
+            if (!password.empty() && password[0] == ' ') {
+                password.erase(0, 1);
+            }
+        }
+    joinChannel(clientFd, channel, password);
     } else if (cmd == "PRIVMSG") {
         std::string target;
         std::getline(iss, target, ' ');
@@ -254,6 +331,39 @@ void Server::processCommand(int clientFd, const std::string& command) {
         } else {
             sendMessage(clientFd, "Error: TOPIC command requires a channel name.");
         }
+    } else if (cmd == "MODE") {
+        std::string channel, modeArg;
+        iss >> channel >> modeArg;
+    // Checking if setting (+) or removing (-) a mode
+        bool set = (modeArg[0] == '+');
+        std::string mode = modeArg.substr(1, 1); // Extract the mode character (e.g., 'k' or 'l')
+        std::string argument; // Could be a password or user limit
+
+        if (mode == "k") {
+        // If setting the password, extract it from the command
+            if (set) {
+            // Attempt to extract password as a separate argument
+                if (!(iss >> argument) || argument.empty()) {
+                    sendMessage(clientFd, "Error: A password is required to set the channel key.");
+                    return;
+                }
+            }
+            modeCmd(clientFd, channel, mode, set, argument);
+        } else if (mode == "l") {
+        // Handle user limit mode
+            if (set) {
+            // Extract the user limit as an argument if setting
+                if (!(iss >> argument) || argument.empty()) {
+                    sendMessage(clientFd, "Error: A user limit is required to set this mode.");
+                    return;
+                }
+            }
+        // Note: For setting the 'l' mode, 'argument' should be the limit, for removing it can be ignored
+            modeCmd(clientFd, channel, mode, set, argument);
+        } else {
+        // Handling other modes without additional data
+            modeCmd(clientFd, channel, mode, set);
+        }
     }
 }
 
@@ -279,7 +389,7 @@ void Server::processClientMessage(int clientFd, const std::string& message) {
     iss >> firstWord;
 
     // Check if the first word is a recognized command
-    if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER" || firstWord == "KICK" || firstWord == "INVITE" || firstWord == "TOPIC") {
+    if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER" || firstWord == "KICK" || firstWord == "INVITE" || firstWord == "TOPIC" || firstWord == "MODE") {
         // Process known commands
         processCommand(clientFd, message);
     } else {

@@ -25,6 +25,10 @@ private:
     struct pollfd fds[MAX_CLIENTS];
     int nfds; 
     std::map<std::string, std::string> channelTopics;
+    std::map<std::string, bool> channelInviteOnly;
+    std::map<std::string, bool> channelOperatorRestrictions; 
+    std::map<std::string, std::string> channelPasswords;
+    std::map<std::string, int> channelUserLimits;
 
 public:
     Server();
@@ -37,7 +41,7 @@ public:
     void privMsgCmd(int clientFd, const std::vector<std::string>& args);
     void processCommand(int clientFd, const std::string& command);
     void sendMessage(int clientFd, const std::string& message);
-    void joinChannel(int clientFd, const std::string& channelName);
+    void joinChannel(int clientFd, const std::string& channelName, const std::string& password);
     void broadcastMessage(const std::string& channelName, const std::string& message);
     void processClientMessage(int clientFd, const std::string& message);
     void sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message);
@@ -48,4 +52,5 @@ public:
     void kickCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
     void inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
     void topicCmd(int clientFd, const std::string& channel, const std::string& topic);
+    void modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password = "");
 };
