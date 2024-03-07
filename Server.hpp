@@ -53,4 +53,5 @@ public:
     void inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
     void topicCmd(int clientFd, const std::string& channel, const std::string& topic);
     void modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password = "");
+    void sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message);
 };

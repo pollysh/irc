@@ -243,6 +243,26 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
     }
 }
 
+void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
+    int recipientFd = -1;
+    // Explicitly use iterator for map iteration
+    for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+        if (it->second == recipientNickname) {
+            recipientFd = it->first;
+            break;
+        }
+    }
+
+    if (recipientFd != -1) {
+        // Found the recipient, send the message
+        std::string senderNickname = clientNicknames[senderFd];
+        sendMessage(recipientFd, "Private message from " + senderNickname + ": " + message);
+    } else {
+        // Recipient not found
+        sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
+    }
+}
+
 void Server::processCommand(int clientFd, const std::string& command) {
     std::istringstream iss(command);
     std::string cmd;
@@ -277,26 +297,29 @@ void Server::processCommand(int clientFd, const std::string& command) {
                 password.erase(0, 1);
             }
         }
-    joinChannel(clientFd, channel, password);
+        joinChannel(clientFd, channel, password);
     } else if (cmd == "PRIVMSG") {
         std::string target;
-        std::getline(iss, target, ' ');
-        
+        iss >> target; // Use >> to properly extract the target, trimming leading spaces
+    
         std::string message;
-        std::getline(iss, message);
-        
-        if (target.empty() || target[0] != '#') {
-            if (clientLastChannel.find(clientFd) != clientLastChannel.end() && !clientLastChannel[clientFd].empty()) {
-                target = clientLastChannel[clientFd];
-            } else {
-                sendMessage(clientFd, "You have not joined any channel.");
-            }
-        } else
-        {
+        std::getline(iss, message); // Capture the rest of the input as the message
+    
+        if (!message.empty() && message[0] == ' ') {
+        // Remove the leading space before the message content
+            message.erase(0, 1);
+        }
+
+        if (!target.empty() && target[0] != '#') {
+        // This is a private message to a user
+            sendPrivateMessage(clientFd, target, message);
+        } else if (!target.empty()) {
+        // This is a message to a channel
             if (!message.empty()) {
-            // Send the message to the specified channel
-            sendMessageToChannel(clientFd, target, message);
+                sendMessageToChannel(clientFd, target, message);
             }
+        } else {
+            sendMessage(clientFd, "Error: Invalid target for PRIVMSG.");
         }
     } else if (cmd == "KICK")
     {
