@@ -8,7 +8,7 @@ FLAGS = -Wall -Wextra -Werror -std=c++98 -g -fsanitize=address
 LDFLAGS =
 
 # Define the source files
-SOURCES = Server.cpp Commands.cpp #Channel.cpp # Add other .cpp files as needed
+SOURCES = Server.cpp Commands.cpp ProcessCmd.cpp Message.cpp main.cpp
 
 # Define the object files
 OBJECTS = $(SOURCES:.cpp=.o)
