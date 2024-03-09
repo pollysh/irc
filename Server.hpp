@@ -64,6 +64,8 @@ public:
     void kickCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
     void inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname);
     void topicCmd(int clientFd, const std::string& channel, const std::string& topic);
-    void modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password = "");
+    void modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password = "", const std::string& targetNickname = "");
     void sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message);
+    int getClientFdFromNickname(const std::string& targetNickname);
+    bool isClientOperatorOfChannel(int clientFd, const std::string& channel);
 };

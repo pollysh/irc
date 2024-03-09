@@ -1,6 +1,32 @@
 #include "Server.hpp"
 
-void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password) {
+int Server::getClientFdFromNickname(const std::string& targetNickname) {
+    std::map<int, std::string>::const_iterator it;
+    for (it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+        if (it->second == targetNickname) {
+            return it->first; // FD found for the nickname
+        }
+    }
+    return -1; // Not found
+}
+
+bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel) {
+    // Check if the channel exists
+    if (channels.find(channel) == channels.end()) {
+        return false; // Channel does not exist
+    }
+
+    // Check if the client is the operator of the channel
+    std::map<std::string, int>::iterator it = channelOperators.find(channel);
+    if (it != channelOperators.end() && it->second == clientFd) {
+        return true; // The client is the operator
+    }
+
+    return false; // The client is not the operator
+}
+
+
+void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password, const std::string& targetNickname) {
     // Existing checks for channel existence and operator status...
 
     if (mode == "i") {
@@ -45,6 +71,38 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
         } else {
             channelUserLimits.erase(channel);
             sendMessage(clientFd, "User limit for " + channel + " has been removed.");
+        }
+    } else if (mode == "o"){
+        // Ensure the channel exists
+        if (channels.find(channel) == channels.end()) {
+            sendMessage(clientFd, "Error: The specified channel does not exist.");
+            return;
+        }
+        std::cout << "Nickname: " << targetNickname << std::endl;
+        int targetFd = getClientFdFromNickname(targetNickname);
+        if (targetFd == -1) {
+            sendMessage(clientFd, "Error: User not found.");
+            return;
+        }
+
+        // Check if the client is an operator of the channel
+        if (!isClientOperatorOfChannel(clientFd, channel)) {
+            sendMessage(clientFd, "Error: You are not an operator of the channel.");
+            return;
+        }
+
+        if (set) {
+            // Add target as an operator
+            channelOperators[channel] = targetFd; // Assuming channelOperators maps channels to their operators
+            sendMessage(clientFd, targetNickname + " is now an operator of " + channel + ".");
+        } else {
+            // Remove target from being an operator
+            if (channelOperators[channel] == targetFd) { // Check if target is indeed the current operator
+                channelOperators[channel] = -1; // Indicate no operator or set to a default operator
+                sendMessage(clientFd, targetNickname + " is no longer an operator of " + channel + ".");
+            } else {
+                sendMessage(clientFd, "Error: " + targetNickname + " is not an operator of the channel.");
+            }
         }
     } else {
         sendMessage(clientFd, "Error: Unsupported mode.");
@@ -96,7 +154,7 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
         sendMessage(clientFd, "Error: " + channelName + " is invite-only, and you're not invited.");
         return;
     }
-    
+
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
         std::cerr << "Client " << clientFd << " attempted to join a channel without setting a nickname." << std::endl;
         sendMessage(clientFd, "You must set a nickname before joining a channel.");

@@ -93,37 +93,23 @@ void Server::processCommand(int clientFd, const std::string& command) {
             sendMessage(clientFd, "Error: TOPIC command requires a channel name.");
         }
     } else if (cmd == "MODE") {
-        std::string channel, modeArg;
+        std::string channel, modeArg, targetNickname;;
         iss >> channel >> modeArg;
     // Checking if setting (+) or removing (-) a mode
         bool set = (modeArg[0] == '+');
         std::string mode = modeArg.substr(1, 1); // Extract the mode character (e.g., 'k' or 'l')
         std::string argument; // Could be a password or user limit
 
-        if (mode == "k") {
-        // If setting the password, extract it from the command
-            if (set) {
-            // Attempt to extract password as a separate argument
-                if (!(iss >> argument) || argument.empty()) {
-                    sendMessage(clientFd, "Error: A password is required to set the channel key.");
-                    return;
-                }
-            }
-            modeCmd(clientFd, channel, mode, set, argument);
-        } else if (mode == "l") {
-        // Handle user limit mode
-            if (set) {
-            // Extract the user limit as an argument if setting
-                if (!(iss >> argument) || argument.empty()) {
-                    sendMessage(clientFd, "Error: A user limit is required to set this mode.");
-                    return;
-                }
-            }
-        // Note: For setting the 'l' mode, 'argument' should be the limit, for removing it can be ignored
-            modeCmd(clientFd, channel, mode, set, argument);
+        if (mode == "k" || mode == "l" || mode == "o") {
+        // Extract the argument or targetNickname
+        iss >> targetNickname;
+        if (targetNickname.empty()) {
+            sendMessage(clientFd, "Error: Missing argument for setting mode " + mode);
+            return;
         } else {
         // Handling other modes without additional data
-            modeCmd(clientFd, channel, mode, set);
+            modeCmd(clientFd, channel, mode, set, targetNickname, targetNickname);
+        }
         }
     }
 }
