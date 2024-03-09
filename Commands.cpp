@@ -88,6 +88,15 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 }
 
 void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
+
+    bool isInviteOnly = channelInviteOnly[channelName];
+    bool isInvited = channelInvitations[channelName].find(clientFd) != channelInvitations[channelName].end();
+
+    if (isInviteOnly && !isInvited) {
+        sendMessage(clientFd, "Error: " + channelName + " is invite-only, and you're not invited.");
+        return;
+    }
+    
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
         std::cerr << "Client " << clientFd << " attempted to join a channel without setting a nickname." << std::endl;
         sendMessage(clientFd, "You must set a nickname before joining a channel.");

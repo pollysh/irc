@@ -14,6 +14,7 @@
 #include <poll.h>
 #include <map>
 #include <sstream>
+#include <set>
 
 #define MAX_CLIENTS 1024
 
@@ -35,6 +36,7 @@ private:
     int nfds; 
     std::map<std::string, std::string> channelTopics;
     std::map<std::string, bool> channelInviteOnly;
+    std::map<std::string, std::set<int> > channelInvitations; 
     std::map<std::string, bool> channelOperatorRestrictions; 
     std::map<std::string, std::string> channelPasswords;
     std::map<std::string, int> channelUserLimits;
