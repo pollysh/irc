@@ -68,7 +68,7 @@ void Server::acceptNewConnection() {
         return;
     }
     
-    clientAuthenticated[new_socket] = false; // Mark new clients as unauthenticated
+    clientAuthenticated[new_socket] = false;
     
     if (setNonBlocking(new_socket) < 0) {
         std::cerr << "Error setting new socket to non-blocking." << std::endl;
@@ -116,14 +116,13 @@ void Server::processConnections()
                 std::cout << "Client disconnected." << std::endl;
                 close(fds[i].fd);
 
-                // Clean up authentication status and any other client-specific data
                 clientAuthenticated.erase(fds[i].fd);
 
-                fds[i] = fds[--nfds]; // Adjust for removal
+                fds[i] = fds[--nfds];
             } else {
                 std::cerr << "Error on recv." << std::endl;
                 close(fds[i].fd);
-                fds[i] = fds[--nfds]; // Adjust for removal
+                fds[i] = fds[--nfds];
             }
         }
     }

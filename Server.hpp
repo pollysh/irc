@@ -24,7 +24,7 @@
 class Server {
 private:
     std::map<int, std::string> clientNicknames;
-    std::map<std::string, std::vector<int> > channels; // Map for channel names to lists of participants
+    std::map<std::string, std::vector<int> > channels;
     typedef void (Server::*CommandHandler)(int, const std::vector<std::string>&);
     std::map<std::string, CommandHandler> commandHandlers;
     std::map<int, std::string> clientUsernames;
