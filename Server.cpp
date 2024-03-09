@@ -30,8 +30,9 @@ Server::Server(int port, const std::string& password) : portNum(port), serverPas
         exit(-1);
     }
 
-    if (setNonBlocking(server_fd) < 0) {
-        std::cerr << "Error setting server socket to non-blocking." << std::endl;
+    int yes = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+        std::cerr << "Error setting socket options." << std::endl;
         exit(-1);
     }
 
