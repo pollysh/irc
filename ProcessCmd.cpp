@@ -6,13 +6,7 @@ void Server::processCommand(int clientFd, const std::string& command) {
     iss >> cmd;
 
     if (cmd == "NICK") {
-        std::string nickname;
-        iss >> nickname;
-        if (!nickname.empty()) {
-            clientNicknames[clientFd] = nickname;
-            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-            sendMessage(clientFd, "Nickname set to " + nickname);
-        }
+        nickCmd(clientFd, command);
     } else if (cmd == "USER") {
         std::string username;
         iss >> username;
@@ -87,20 +81,23 @@ void Server::processCommand(int clientFd, const std::string& command) {
             sendMessage(clientFd, "Error: TOPIC command requires a channel name.");
         }
     } else if (cmd == "MODE") {
-        std::string channel, modeArg, targetNickname;;
-        iss >> channel >> modeArg;
-        bool set = (modeArg[0] == '+');
-        std::string mode = modeArg.substr(1, 1);
-        std::string argument;
+    std::string channel, modeArg;
+    iss >> channel >> modeArg;
+    bool set = (modeArg[0] == '+');
+    std::string mode = modeArg.substr(1, 1);
 
-        if (mode == "k" || mode == "l" || mode == "o") {
-        iss >> targetNickname;
-        if (targetNickname.empty()) {
+    if (mode == "i" || mode == "t") {
+
+        modeCmd(clientFd, channel, mode, set);
+    }
+    else if (mode == "o" || mode == "k" || mode == "l") {
+        std::string argument;
+        iss >> argument; 
+        if (argument.empty()) {
             sendMessage(clientFd, "Error: Missing argument for setting mode " + mode);
             return;
-        } else {
-            modeCmd(clientFd, channel, mode, set, targetNickname, targetNickname);
         }
-        }
+        modeCmd(clientFd, channel, mode, set, argument, argument);
+    }
     }
 }

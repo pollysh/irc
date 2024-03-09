@@ -71,4 +71,5 @@ public:
     void sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message);
     int getClientFdFromNickname(const std::string& targetNickname);
     bool isClientOperatorOfChannel(int clientFd, const std::string& channel);
+    void nickCmd(int clientFd, const std::string& command);
 };

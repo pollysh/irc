@@ -10,13 +10,46 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
     return -1;
 }
 
+void Server::nickCmd(int clientFd, const std::string& command) {
+    std::istringstream iss(command);
+    std::string cmd, nickname;
+    iss >> cmd >> nickname;
+
+    std::string extra;
+    getline(iss, extra);
+    size_t startPos = extra.find_first_not_of(" ");
+    if (startPos != std::string::npos) {
+        extra = extra.substr(startPos);
+    }
+
+    if (!nickname.empty() && extra.empty()) {
+        bool nicknameExists = false;
+        for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+            if (it->second == nickname) {
+                nicknameExists = true;
+                break;
+            }
+        }
+
+        if (nicknameExists) {
+            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
+        } else {
+            clientNicknames[clientFd] = nickname;
+            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
+            sendMessage(clientFd, "Nickname set to " + nickname);
+        }
+    } else if (nickname.empty()) {
+        sendMessage(clientFd, "Error: Nickname cannot be empty.");
+    } else {
+        sendMessage(clientFd, "Error: Nickname cannot contain spaces or be multiple words.");
+    }
+}
+
 bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel) {
-    // Check if the channel exists
     if (channels.find(channel) == channels.end()) {
         return false;
     }
 
-    // Check if the client is the operator of the channel
     std::map<std::string, int>::iterator it = channelOperators.find(channel);
     if (it != channelOperators.end() && it->second == clientFd) {
         return true;
@@ -28,6 +61,11 @@ bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel)
 
 void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password, const std::string& targetNickname) {
     
+    if (!isClientOperatorOfChannel(clientFd, channel)) {
+            sendMessage(clientFd, "Error: You must be an operator to change this mode.");
+            return;
+    }
+
     if (mode == "i") {
         channelInviteOnly[channel] = set;
         std::string modeStatus = set ? "enabled" : "disabled";
@@ -99,30 +137,32 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
     }
 }
 
-void Server::topicCmd(int clientFd, const std::string& channel, const std::string& topic) {
+void Server::topicCmd(int clientFd, const std::string& channel, const std::string& newTopic) {
     if (channels.find(channel) == channels.end()) {
         sendMessage(clientFd, "Error: The specified channel does not exist.");
         return;
     }
 
-    std::vector<int>& clients = channels[channel];
-    if (std::find(clients.begin(), clients.end(), clientFd) == clients.end()) {
-        sendMessage(clientFd, "Error: You are not a member of the specified channel.");
-        return;
-    }
+    bool noRestrictions = channelOperatorRestrictions[channel];
+    bool isOperator = (channelOperators[channel] == clientFd);
 
-    if (topic.empty()) {
+    if (newTopic.empty()) {
         std::string currentTopic = channelTopics[channel];
         if (currentTopic.empty()) {
             sendMessage(clientFd, "No topic is set for " + channel + ".");
         } else {
-            sendMessage(clientFd, "Current topic for " + channel + ": " + currentTopic);
+            if (noRestrictions || isOperator) {
+                sendMessage(clientFd, "Current topic for " + channel + ": " + currentTopic);
+            } else {
+                sendMessage(clientFd, "Error: Operator restrictions are in place. Only the operator can view the topic.");
+            }
         }
     } else {
-        if (channelOperators.find(channel) != channelOperators.end() && channelOperators[channel] == clientFd) {
-            channelTopics[channel] = topic;
-            sendMessage(clientFd, "Topic for " + channel + " updated to: " + topic);
-            broadcastMessage(channel, "The topic for " + channel + " has been changed to: " + topic);
+        if (isOperator) {
+            // Only allow changing the topic if the client is the operator
+            channelTopics[channel] = newTopic;
+            sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
+            broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic);
         } else {
             sendMessage(clientFd, "Error: Only the channel operator can change the topic.");
         }
@@ -131,7 +171,7 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 
 void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
 
-    bool isInviteOnly = channelInviteOnly[channelName];
+    bool isInviteOnly = channelInviteOnly.find(channelName) != channelInviteOnly.end() && channelInviteOnly[channelName];
     bool isInvited = channelInvitations[channelName].find(clientFd) != channelInvitations[channelName].end();
 
     if (isInviteOnly && !isInvited) {
@@ -215,6 +255,9 @@ void Server::inviteCmd(int clientFd, const std::string& channel, const std::stri
             sendMessage(clientFd, "Error: User not found.");
             return;
         }
+
+        // Before checking if the user is already in the channel, record the invitation
+        channelInvitations[channel].insert(targetFd);
 
         std::vector<int>& clients = channels[channel];
         if (std::find(clients.begin(), clients.end(), targetFd) != clients.end()) {
