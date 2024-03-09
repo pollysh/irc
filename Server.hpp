@@ -1,15 +1,24 @@
 #include <map>
 #include <vector>
 #include <string>
-#include "ClientInfo.hpp"
 #include <netinet/in.h>
 #include <poll.h>
+#include <iostream>
+#include <cstring>
+#include <vector>
+#include <unistd.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <poll.h>
+#include <map>
+#include <sstream>
 
 #define MAX_CLIENTS 1024
 
 class Server {
 private:
-    std::map<int, ClientInfo> clients;
     std::map<int, std::string> clientNicknames;
     std::map<std::string, std::vector<int> > channels; // Map for channel names to lists of participants
     typedef void (Server::*CommandHandler)(int, const std::vector<std::string>&);
