@@ -100,14 +100,7 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
             // Call sendMessageToChannel to send the message
             sendMessageToChannel(clientFd, channel, messageToChannel);
     } else {
-        // Send the message to the last channel the client joined if there's no command specified
-        std::map<int, std::string>::iterator lastChannelIter = clientLastChannel.find(clientFd);
-        if (lastChannelIter != clientLastChannel.end() && !lastChannelIter->second.empty()) {
-            std::string messageToChannel = "PRIVMSG " + lastChannelIter->second + " :" + trimmedMessage;
-            processCommand(clientFd, messageToChannel);
-        } else {
             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
         }
-    }
     }
 }
