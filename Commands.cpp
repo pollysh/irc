@@ -258,6 +258,7 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
 }
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
+    
     channelInvitations[channel].insert(getClientFdFromNickname(targetNickname)); 
     
     if (channels.find(channel) == channels.end()) {
@@ -323,30 +324,28 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
     }
 }
 
-std::string trim(const std::string& str) {
-    size_t first = str.find_first_not_of(' ');
-    if (std::string::npos == first) { return str; }
-    size_t last = str.find_last_not_of(' ');
-    return str.substr(first, (last - first + 1));
+std::string toLower(const std::string& str) {
+    std::string lowerStr;
+    for (std::string::const_iterator it = str.begin(); it != str.end(); ++it) {
+        lowerStr += std::tolower(*it, std::locale());
+    }
+    return lowerStr;
 }
 
-std::string toLower(const std::string& input) {
-    std::string result;
-    for (size_t i = 0; i < input.size(); ++i) {
-        result += static_cast<char>(tolower(input[i]));
-    }
-    return result;
+std::string trim(const std::string& str) {
+    std::string::size_type first = str.find_first_not_of(' ');
+    if (first == std::string::npos) return "";
+    std::string::size_type last = str.find_last_not_of(' ');
+    return str.substr(first, last - first + 1);
 }
 
 
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
-    std::string lowerRecipientNickname = toLower(recipientNickname);
+    std::string lowerRecipientNickname = toLower(trim(recipientNickname));
 
     int recipientFd = -1;
     for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-        std::string lowerStoredNickname = toLower(it->second);
-
-        if (lowerStoredNickname == lowerRecipientNickname) {
+        if (toLower(trim(it->second)) == lowerRecipientNickname) {
             recipientFd = it->first;
             break;
         }
@@ -354,9 +353,13 @@ void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickna
 
     if (recipientFd != -1) {
         std::string senderNickname = clientNicknames[senderFd];
-        sendMessage(recipientFd, "Private message from " + senderNickname + ": " + message);
+        // Format the message according to IRC standards for PRIVMSG
+        std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + recipientNickname + " :" + message;
+        
+        // Send the formatted message to the recipient
+        sendMessage(recipientFd, formattedMessage);
     } else {
+        // Error handling for when the user is not found
         sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
     }
 }
-
