@@ -15,6 +15,7 @@
 #include <map>
 #include <sstream>
 #include <set>
+#include <errno.h>
 
 #define MAX_CLIENTS 1024
 #define MAX_PORT 65535
@@ -73,4 +74,5 @@ public:
     bool isClientOperatorOfChannel(int clientFd, const std::string& channel);
     void nickCmd(int clientFd, const std::string& command);
     void userCmd(int clientFd, const std::string& command);
+    void receiveData(int clientFd, const std::string& data);
 };
