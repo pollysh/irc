@@ -45,6 +45,41 @@ void Server::nickCmd(int clientFd, const std::string& command) {
     }
 }
 
+void Server::userCmd(int clientFd, const std::string& command) {
+    std::istringstream iss(command);
+    std::string cmd, username;
+    iss >> cmd >> username;
+
+    std::string extra;
+    getline(iss, extra);
+    size_t startPos = extra.find_first_not_of(" ");
+    if (startPos != std::string::npos) {
+        extra = extra.substr(startPos);
+    }
+
+    if (!username.empty() && extra.empty()) {
+        bool usernameExists = false;
+        for (std::map<int, std::string>::iterator it = clientUsernames.begin(); it != clientUsernames.end(); ++it) {
+            if (it->second == username) {
+                usernameExists = true;
+                break;
+            }
+        }
+
+        if (usernameExists) {
+            sendMessage(clientFd, "Error: Username '" + username + "' is already in use.");
+        } else {
+            clientUsernames[clientFd] = username;
+            std::cout << "Client " << clientFd << " sets username to " << username << std::endl;
+            sendMessage(clientFd, "Username set to " + username);
+        }
+    } else if (username.empty()) {
+        sendMessage(clientFd, "Error: Username cannot be empty.");
+    } else {
+        sendMessage(clientFd, "Error: Username cannot contain spaces or be multiple words.");
+    }
+}
+
 bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel) {
     if (channels.find(channel) == channels.end()) {
         return false;
@@ -143,29 +178,26 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
         return;
     }
 
-    bool noRestrictions = channelOperatorRestrictions[channel];
-    bool isOperator = (channelOperators[channel] == clientFd);
+    bool restrictionsActive = channelOperatorRestrictions.count(channel) ? channelOperatorRestrictions[channel] : true;
+    bool isOperator = (channelOperators.count(channel) && channelOperators[channel] == clientFd);
 
-    if (newTopic.empty()) {
-        std::string currentTopic = channelTopics[channel];
-        if (currentTopic.empty()) {
-            sendMessage(clientFd, "No topic is set for " + channel + ".");
+    if (!restrictionsActive || isOperator) {
+        if (newTopic.empty()) {
+            // Viewing the current topic
+            std::string currentTopic = channelTopics[channel];
+            sendMessage(clientFd, currentTopic.empty() ? "No topic is set for " + channel + "." : 
+                "Current topic for " + channel + ": " + currentTopic);
         } else {
-            if (noRestrictions || isOperator) {
-                sendMessage(clientFd, "Current topic for " + channel + ": " + currentTopic);
-            } else {
-                sendMessage(clientFd, "Error: Operator restrictions are in place. Only the operator can view the topic.");
+            // Changing the topic
+            channelTopics[channel] = newTopic;
+            sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
+            // Broadcast the change if restrictions are off or if the changer is the operator
+            if (!restrictionsActive) {
+                broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic);
             }
         }
     } else {
-        if (isOperator) {
-            // Only allow changing the topic if the client is the operator
-            channelTopics[channel] = newTopic;
-            sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
-            broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic);
-        } else {
-            sendMessage(clientFd, "Error: Only the channel operator can change the topic.");
-        }
+        sendMessage(clientFd, "Error: Operator restrictions are in place. Only the operator can view or change the topic.");
     }
 }
 

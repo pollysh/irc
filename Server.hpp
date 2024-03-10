@@ -72,4 +72,5 @@ public:
     int getClientFdFromNickname(const std::string& targetNickname);
     bool isClientOperatorOfChannel(int clientFd, const std::string& channel);
     void nickCmd(int clientFd, const std::string& command);
+    void userCmd(int clientFd, const std::string& command);
 };

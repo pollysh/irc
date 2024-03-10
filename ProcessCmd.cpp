@@ -8,13 +8,7 @@ void Server::processCommand(int clientFd, const std::string& command) {
     if (cmd == "NICK") {
         nickCmd(clientFd, command);
     } else if (cmd == "USER") {
-        std::string username;
-        iss >> username;
-        if (!username.empty()) {
-            clientUsernames[clientFd] = username;
-            std::cout << "Client " << clientFd << " sets username to " << username << std::endl;
-            sendMessage(clientFd, "Username set to " + username);
-        }
+        userCmd(clientFd, command);
     } else if (cmd == "JOIN") {
         std::string channel;
         std::string password = "";
