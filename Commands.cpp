@@ -13,16 +13,29 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 void Server::nickCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
     std::string cmd;
-    getline(iss >> std::ws, cmd, ' '); // Extract "NICK" command.
-    
-    std::string nickname;
-    getline(iss >> std::ws, nickname); // Get the rest of the line as the nickname.
+    iss >> cmd; // Skip the "NICK" command part
 
+    std::string nickname;
+    std::getline(iss, nickname); // Read the rest of the line as the nickname
+
+    // Trim leading spaces from the nickname
+    size_t startPos = nickname.find_first_not_of(" \t");
+    if (startPos != std::string::npos) {
+        nickname = nickname.substr(startPos);
+    }
+
+    // Now, find the first space after the start of the nickname to ensure no spaces are within or after it
+    size_t endPos = nickname.find_first_of(" \t");
+    if (endPos != std::string::npos) {
+        // If there's a space within the nickname, only take the part before it
+        nickname = nickname.substr(0, endPos);
+    }
+
+    // Proceed with your original logic now that you've trimmed the nickname
     if (!nickname.empty()) {
-        // Check if the nickname already exists.
         bool nicknameExists = false;
-        for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-            if (it->second == nickname) {
+        for (const auto& nick : clientNicknames) {
+            if (nick.second == nickname) {
                 nicknameExists = true;
                 break;
             }
