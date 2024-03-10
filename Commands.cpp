@@ -258,6 +258,8 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
 }
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
+    channelInvitations[channel].insert(getClientFdFromNickname(targetNickname)); 
+    
     if (channels.find(channel) == channels.end()) {
         sendMessage(clientFd, "Error: The specified channel does not exist.");
         return;
@@ -328,21 +330,21 @@ std::string trim(const std::string& str) {
     return str.substr(first, (last - first + 1));
 }
 
+std::string toLower(const std::string& input) {
+    std::string result;
+    for (size_t i = 0; i < input.size(); ++i) {
+        result += static_cast<char>(tolower(input[i]));
+    }
+    return result;
+}
+
 
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
-    std::string recipientNicknameRaw = trim(recipientNickname);
-
-    std::cout << "Attempting to send message to '" << recipientNickname << "'" << std::endl; // Debug output
-
-    std::cerr << "Received PRIVMSG for nickname: '" << recipientNickname << "'" << std::endl; // Debugging log
+    std::string lowerRecipientNickname = toLower(recipientNickname);
 
     int recipientFd = -1;
-    std::string lowerRecipientNickname = recipientNickname;
-    std::transform(lowerRecipientNickname.begin(), lowerRecipientNickname.end(), lowerRecipientNickname.begin(), ::tolower);
-
     for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-        std::string lowerStoredNickname = it->second;
-        std::transform(lowerStoredNickname.begin(), lowerStoredNickname.end(), lowerStoredNickname.begin(), ::tolower);
+        std::string lowerStoredNickname = toLower(it->second);
 
         if (lowerStoredNickname == lowerRecipientNickname) {
             recipientFd = it->first;
@@ -357,3 +359,4 @@ void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickna
         sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
     }
 }
+
