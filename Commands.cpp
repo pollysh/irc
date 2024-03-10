@@ -11,14 +11,23 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 }
 
 void Server::nickCmd(int clientFd, const std::string& command) {
-    std::istringstream iss(command);
-    std::string cmd;
-    getline(iss >> std::ws, cmd, ' '); // Extract "NICK" command.
-    
+    // Assuming command is "NICK <nickname>\r\n"
     std::string nickname;
-    getline(iss >> std::ws, nickname); // Get the rest of the line as the nickname.
+    std::size_t pos = command.find(" ");
+    if (pos != std::string::npos) {
+        nickname = command.substr(pos + 1);
+        // Removing any trailing newlines or carriage returns
+        nickname.erase(std::remove(nickname.begin(), nickname.end(), '\n'), nickname.end());
+        nickname.erase(std::remove(nickname.begin(), nickname.end(), '\r'), nickname.end());
+    }
 
     if (!nickname.empty()) {
+        // Check for whitespace or more than one word in nickname.
+        if (nickname.find(' ') != std::string::npos) {
+            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
+            return;
+        }
+
         // Check if the nickname already exists.
         bool nicknameExists = false;
         for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
@@ -33,7 +42,7 @@ void Server::nickCmd(int clientFd, const std::string& command) {
         } else {
             clientNicknames[clientFd] = nickname;
             std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-            sendMessage(clientFd, "Nickname set to " + nickname);
+            sendMessage(clientFd, "NICK :" + nickname); // Echo the nickname change back to the client.
         }
     } else {
         sendMessage(clientFd, "Error: Nickname cannot be empty.");
