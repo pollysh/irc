@@ -106,21 +106,16 @@ void Server::processConnections() {
             ssize_t nbytes = recv(fds[i].fd, buffer, BUFFER_SIZE - 1, 0);
 
             if (nbytes > 0) {
-                // Data was read successfully.
                 processClientMessage(fds[i].fd, std::string(buffer));
             } else if (nbytes == 0) {
-                // The client disconnected.
                 std::cout << "Client disconnected." << std::endl;
                 close(fds[i].fd);
                 clientAuthenticated.erase(fds[i].fd);
                 fds[i] = fds[--nfds];
             } else {
-                // Check if the error is EWOULDBLOCK/EAGAIN
                 if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                    // No data available right now, try again later.
                     continue;
                 } else {
-                    // An actual error occurred.
                     std::cerr << "Error on recv: " << strerror(errno) << " (errno " << errno << ")" << std::endl;
                     close(fds[i].fd);
                     fds[i] = fds[--nfds];
