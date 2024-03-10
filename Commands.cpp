@@ -13,24 +13,20 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 void Server::nickCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
     std::string cmd, nickname;
-    iss >> cmd; // Extract the command (e.g., "NICK")
+    iss >> cmd;
 
-    // Capture the rest of the line as the nickname
-    std::getline(iss >> std::ws, nickname); // std::ws consumes leading whitespaces
+    std::getline(iss >> std::ws, nickname);
 
-    // Check if the nickname is empty or contains spaces
     if (nickname.empty()) {
         sendMessage(clientFd, "Error: Nickname cannot be empty.");
         return;
     }
 
     if (nickname.find(" ") != std::string::npos) {
-        // Found a space in the nickname, indicating it's more than one word
         sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
         return;
     }
 
-    // Check if the nickname already exists among connected clients
     bool nicknameExists = false;
     for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
         if (it->second == nickname) {
