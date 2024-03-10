@@ -94,7 +94,13 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
         // Handle unrecognized commands or messages outside channels
         sendMessage(clientFd, ":Server 421 " + command + " :Unknown command");
     } else {
-        // Handle case where command is not recognized and it's not a channel message
-        sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
+        // Send the message to the last channel the client joined if there's no command specified
+        std::map<int, std::string>::iterator lastChannelIter = clientLastChannel.find(clientFd);
+        if (lastChannelIter != clientLastChannel.end() && !lastChannelIter->second.empty()) {
+            std::string messageToChannel = "PRIVMSG " + lastChannelIter->second + " :" + trimmedMessage;
+            processCommand(clientFd, messageToChannel);
+        } else {
+            sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
+        }
     }
 }
