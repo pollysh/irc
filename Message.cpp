@@ -90,9 +90,15 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
     if (command == "JOIN" || command == "PRIVMSG" || command == "NICK" || command == "USER" ||
         command == "KICK" || command == "INVITE" || command == "TOPIC" || command == "MODE") {
         processCommand(clientFd, trimmedMessage);
-    } else if (!command.empty()) {
-        // Handle unrecognized commands or messages outside channels
-        sendMessage(clientFd, ":Server 421 " + command + " :Unknown command");
+    } else {
+        std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
+        if (it != clientLastChannel.end() && !it->second.empty()) {
+            // Client has a last joined channel; construct a PRIVMSG command for it
+            std::string channel = it->second;
+            std::string messageToChannel = trimmedMessage; // Message is already trimmed
+            
+            // Call sendMessageToChannel to send the message
+            sendMessageToChannel(clientFd, channel, messageToChannel);
     } else {
         // Send the message to the last channel the client joined if there's no command specified
         std::map<int, std::string>::iterator lastChannelIter = clientLastChannel.find(clientFd);
@@ -102,5 +108,6 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
         } else {
             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
         }
+    }
     }
 }
