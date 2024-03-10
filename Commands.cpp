@@ -12,44 +12,32 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 
 void Server::nickCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
-    std::string cmd;
-    iss >> cmd; // Skip the "NICK" command part
+    std::string cmd, nickname;
+    iss >> cmd >> nickname; // Extract the first word as the nickname
 
-    std::string nickname;
-    std::getline(iss, nickname); // Read the rest of the line as the nickname
-
-    // Trim leading spaces from the nickname
-    size_t startPos = nickname.find_first_not_of(" \t");
-    if (startPos != std::string::npos) {
-        nickname = nickname.substr(startPos);
+    // Consume any extra words to ignore them, ensuring only the first word is treated as the nickname
+    std::string extra;
+    iss >> extra;
+    if (!extra.empty()) {
+        sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
+        return;
     }
 
-    // Now, find the first space after the start of the nickname to ensure no spaces are within or after it
-    size_t endPos = nickname.find_first_of(" \t");
-    if (endPos != std::string::npos) {
-        // If there's a space within the nickname, only take the part before it
-        nickname = nickname.substr(0, endPos);
+    // Check if the nickname already exists
+    bool nicknameExists = false;
+    for (const auto& nick : clientNicknames) {
+        if (nick.second == nickname) {
+            nicknameExists = true;
+            break;
+        }
     }
 
-    // Proceed with your original logic now that you've trimmed the nickname
-    if (!nickname.empty()) {
-        bool nicknameExists = false;
-        for (const auto& nick : clientNicknames) {
-            if (nick.second == nickname) {
-                nicknameExists = true;
-                break;
-            }
-        }
-
-        if (nicknameExists) {
-            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
-        } else {
-            clientNicknames[clientFd] = nickname;
-            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-            sendMessage(clientFd, "Nickname set to " + nickname);
-        }
+    if (nicknameExists) {
+        sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
     } else {
-        sendMessage(clientFd, "Error: Nickname cannot be empty.");
+        clientNicknames[clientFd] = nickname;
+        std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
+        sendMessage(clientFd, "Nickname set to " + nickname);
     }
 }
 
