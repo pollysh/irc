@@ -42,17 +42,13 @@ void Server::nickCmd(int clientFd, const std::string& command) {
 
 void Server::userCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
-    std::string cmd, username;
-    iss >> cmd >> username;
+    std::string cmd;
+    getline(iss >> std::ws, cmd, ' ');
 
-    std::string extra;
-    getline(iss, extra);
-    size_t startPos = extra.find_first_not_of(" ");
-    if (startPos != std::string::npos) {
-        extra = extra.substr(startPos);
-    }
+    std::string username;
+    getline(iss >> std::ws, username);
 
-    if (!username.empty() && extra.empty()) {
+    if (!username.empty()) {
         bool usernameExists = false;
         for (std::map<int, std::string>::iterator it = clientUsernames.begin(); it != clientUsernames.end(); ++it) {
             if (it->second == username) {
@@ -325,10 +321,30 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
     }
 }
 
+std::string trim(const std::string& str) {
+    size_t first = str.find_first_not_of(' ');
+    if (std::string::npos == first) { return str; }
+    size_t last = str.find_last_not_of(' ');
+    return str.substr(first, (last - first + 1));
+}
+
+
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
+    std::string recipientNicknameRaw = trim(recipientNickname);
+
+    std::cout << "Attempting to send message to '" << recipientNickname << "'" << std::endl; // Debug output
+
+    std::cerr << "Received PRIVMSG for nickname: '" << recipientNickname << "'" << std::endl; // Debugging log
+
     int recipientFd = -1;
+    std::string lowerRecipientNickname = recipientNickname;
+    std::transform(lowerRecipientNickname.begin(), lowerRecipientNickname.end(), lowerRecipientNickname.begin(), ::tolower);
+
     for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-        if (it->second == recipientNickname) {
+        std::string lowerStoredNickname = it->second;
+        std::transform(lowerStoredNickname.begin(), lowerStoredNickname.end(), lowerStoredNickname.begin(), ::tolower);
+
+        if (lowerStoredNickname == lowerRecipientNickname) {
             recipientFd = it->first;
             break;
         }

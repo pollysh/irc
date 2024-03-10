@@ -16,6 +16,7 @@
 #include <sstream>
 #include <set>
 #include <errno.h>
+#include <algorithm>
 
 #define MAX_CLIENTS 1024
 #define MAX_PORT 65535
