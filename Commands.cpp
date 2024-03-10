@@ -183,7 +183,6 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 
     if (!restrictionsActive || isOperator) {
         if (newTopic.empty()) {
-            // Viewing the current topic
             std::string currentTopic = channelTopics[channel];
             sendMessage(clientFd, currentTopic.empty() ? "No topic is set for " + channel + "." : 
                 "Current topic for " + channel + ": " + currentTopic);
@@ -191,7 +190,6 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
             // Changing the topic
             channelTopics[channel] = newTopic;
             sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
-            // Broadcast the change if restrictions are off or if the changer is the operator
             if (!restrictionsActive) {
                 broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic);
             }
