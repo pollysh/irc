@@ -15,21 +15,18 @@ void Server::nickCmd(int clientFd, const std::string& command) {
     std::string cmd, nickname;
     iss >> cmd; // Extract the command (e.g., "NICK")
 
-    // Use a counter to check how many words are provided after the command
-    int wordCount = 0;
-    while (iss >> nickname) {
-        wordCount++;
-        if (wordCount > 1) {
-            // If more than one word is found, send an error and exit the function
-            sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
-            return;
-        }
+    // Capture the rest of the line as the nickname
+    std::getline(iss >> std::ws, nickname); // std::ws consumes leading whitespaces
+
+    // Check if the nickname is empty or contains spaces
+    if (nickname.empty()) {
+        sendMessage(clientFd, "Error: Nickname cannot be empty.");
+        return;
     }
 
-    // At this point, nickname contains the first word provided after "NICK"
-    if (wordCount == 0) {
-        // No nickname provided after the command
-        sendMessage(clientFd, "Error: Nickname cannot be empty.");
+    if (nickname.find(" ") != std::string::npos) {
+        // Found a space in the nickname, indicating it's more than one word
+        sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
         return;
     }
 
