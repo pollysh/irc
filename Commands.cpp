@@ -13,34 +13,35 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 void Server::nickCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
     std::string cmd, nickname;
-    iss >> cmd;
+    iss >> cmd >> nickname;
 
-    std::getline(iss >> std::ws, nickname);
-
-    if (nickname.empty()) {
-        sendMessage(clientFd, "Error: Nickname cannot be empty.");
-        return;
+    std::string extra;
+    getline(iss, extra);
+    size_t startPos = extra.find_first_not_of(" ");
+    if (startPos != std::string::npos) {
+        extra = extra.substr(startPos);
     }
 
-    if (nickname.find(" ") != std::string::npos) {
-        sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
-        return;
-    }
-
-    bool nicknameExists = false;
-    for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-        if (it->second == nickname) {
-            nicknameExists = true;
-            break;
+    if (!nickname.empty() && extra.empty()) {
+        bool nicknameExists = false;
+        for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+            if (it->second == nickname) {
+                nicknameExists = true;
+                break;
+            }
         }
-    }
 
-    if (nicknameExists) {
-        sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
+        if (nicknameExists) {
+            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
+        } else {
+            clientNicknames[clientFd] = nickname;
+            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
+            sendMessage(clientFd, "Nickname set to " + nickname);
+        }
+    } else if (nickname.empty()) {
+        sendMessage(clientFd, "Error: Nickname cannot be empty.");
     } else {
-        clientNicknames[clientFd] = nickname;
-        std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-        sendMessage(clientFd, "Nickname set to " + nickname);
+        sendMessage(clientFd, "Error: Nickname cannot contain spaces or be multiple words.");
     }
 }
 

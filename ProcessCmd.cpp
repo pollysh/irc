@@ -6,19 +6,7 @@ void Server::processCommand(int clientFd, const std::string& command) {
     iss >> cmd;
 
     if (cmd == "NICK") {
-        std::string nickname;
-        iss >> std::ws; // Consume any leading whitespace before the nickname
-        std::getline(iss, nickname);
-
-        // Now nickname contains everything after "NICK ", including spaces
-        // You need to further validate the nickname here if necessary
-        // For example, ensure it doesn't contain spaces or it's not empty
-        if (!nickname.empty() && nickname.find(' ') == std::string::npos) {
-            nickCmd(clientFd, nickname);
-        } else {
-            // Handle invalid nickname format
-            sendMessage(clientFd, "Error: Invalid nickname format.");
-        }
+        nickCmd(clientFd, command);
     } else if (cmd == "USER") {
         userCmd(clientFd, command);
     } else if (cmd == "JOIN") {
