@@ -332,7 +332,7 @@ std::string toLower(const std::string& str) {
     return lowerStr;
 }
 
-std::string trim(const std::string& str) {
+std::string Server::trim(const std::string& str) {
     std::string::size_type first = str.find_first_not_of(' ');
     if (first == std::string::npos) return "";
     std::string::size_type last = str.find_last_not_of(' ');

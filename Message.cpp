@@ -21,64 +21,80 @@ void Server::sendMessage(int clientFd, const std::string& message) {
 }
 
 void Server::sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message) {
+    // Ensure the channel exists
     if (channels.find(channel) == channels.end()) {
-        sendMessage(clientFd, "Channel does not exist or you haven't joined any channel.");
+        sendMessage(clientFd, "ERROR :No such channel.");
         return;
     }
 
-    std::map<int, std::string>::iterator itNick = clientNicknames.find(clientFd);
-    std::string senderNickname;
-    if (itNick != clientNicknames.end()) {
-        senderNickname = itNick->second;
-    } else {
-        senderNickname = "Unknown";
+    // Check if the client is part of the channel
+    std::map<std::string, std::vector<int> >::iterator channelIt = channels.find(channel);
+    bool isMember = false;
+    for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
+        if (*it == clientFd) {
+            isMember = true;
+            break;
+        }
     }
 
-    std::string formattedMessage = senderNickname + ": " + message;
+    if (!isMember) {
+        sendMessage(clientFd, "ERROR :You're not a member of channel " + channel);
+        return;
+    }
 
-    std::vector<int>& members = channels[channel];
-    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
-        int memberId = *it;
-        if (memberId != clientFd) { 
-            sendMessage(memberId, formattedMessage);
+    // Retrieve the sender's nickname or use a placeholder if not found
+    std::string senderNickname = "Unknown";
+    std::map<int, std::string>::iterator nickIt = clientNicknames.find(clientFd);
+    if (nickIt != clientNicknames.end()) {
+        senderNickname = nickIt->second;
+    }
+
+    // Format the message as per IRC standards
+    std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message;
+
+    // Broadcast the message to all channel members except the sender
+    for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
+        if (*it != clientFd) {
+            sendMessage(*it, formattedMessage);
         }
     }
 }
 
+void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
+    // Trim the message and split by spaces to identify the command and its parameters
+    std::string trimmedMessage = trim(rawMessage);
+    std::istringstream iss(trimmedMessage);
+    std::string command;
+    iss >> command;
 
-void Server::processClientMessage(int clientFd, const std::string& message) {
-    std::istringstream iss(message);
-    std::string firstWord;
-    iss >> firstWord;
-
-    if (firstWord == "PASS") {
+    // Handle PASS command for authentication
+    if (command == "PASS") {
         std::string providedPassword;
         iss >> providedPassword;
         if (providedPassword == serverPassword) {
             clientAuthenticated[clientFd] = true;
-            sendMessage(clientFd, "Password accepted. You are now authenticated.");
+            sendMessage(clientFd, ":Server 001 :Password accepted. You are now authenticated.");
         } else {
-            sendMessage(clientFd, "Incorrect password. Please try again.");
+            sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
         }
         return;
     }
 
+    // Require authentication for any further commands
     if (!clientAuthenticated[clientFd]) {
-        sendMessage(clientFd, "Please authenticate with the PASS command.");
+        sendMessage(clientFd, ":Server 464 :Please authenticate with the PASS command.");
         return;
     }
 
-    if (clientAuthenticated[clientFd]) {
-        if (firstWord == "JOIN" || firstWord == "PRIVMSG" || firstWord == "NICK" || firstWord == "USER"
-            || firstWord == "KICK" || firstWord == "INVITE" || firstWord == "TOPIC" || firstWord == "MODE") {
-            processCommand(clientFd, message);
-        } else {
-            std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
-            if (it != clientLastChannel.end() && !it->second.empty()) {
-                sendMessageToChannel(clientFd, it->second, message);
-            } else {
-                sendMessage(clientFd, "You haven't joined any channel.\n");
-            }
-        }
+    // Process recognized commands
+    if (command == "JOIN" || command == "PRIVMSG" || command == "NICK" || command == "USER" ||
+        command == "KICK" || command == "INVITE" || command == "TOPIC" || command == "MODE") {
+        processCommand(clientFd, trimmedMessage);
+    } else if (!command.empty()) {
+        // Handle unrecognized commands or messages outside channels
+        sendMessage(clientFd, ":Server 421 " + command + " :Unknown command");
+    } else {
+        // Handle case where command is not recognized and it's not a channel message
+        sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
     }
 }

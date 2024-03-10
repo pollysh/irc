@@ -60,7 +60,7 @@ public:
     void sendMessage(int clientFd, const std::string& message);
     void joinChannel(int clientFd, const std::string& channelName, const std::string& password);
     void broadcastMessage(const std::string& channelName, const std::string& message, int excludeFd);
-    void processClientMessage(int clientFd, const std::string& message);
+    void processClientMessage(int clientFd, const std::string& rawMessage);
     void sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message);
     void acceptNewConnection();
     void processConnections();
@@ -76,4 +76,5 @@ public:
     void nickCmd(int clientFd, const std::string& command);
     void userCmd(int clientFd, const std::string& command);
     void receiveData(int clientFd, const std::string& data);
+    std::string trim(const std::string& str);
 };
