@@ -242,33 +242,54 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
         }
     }
 
-    // Join or create channel
+    // Determine if the channel exists and if the client is joining a new channel
     bool isNewChannel = channels.find(channelName) == channels.end();
-    channels[channelName].push_back(clientFd);
-    clientLastChannel[clientFd] = channelName;
-    
-    // Notify client of successful join
-    sendMessage(clientFd, "JOIN :" + channelName);
     if (isNewChannel) {
-        channelOperators[channelName] = clientFd; // First member becomes operator
-        sendMessage(clientFd, "MODE " + channelName + " +o " + clientNicknames[clientFd]); // Notify client of operator status
+        // If it's a new channel, create it and set the joining client as the operator
+        channels[channelName].push_back(clientFd);
+        channelOperators[channelName] = clientFd; // First joiner becomes the channel operator
+    } else {
+        // If channel exists, just add the client if not already a member
+        std::vector<int>& clients = channels[channelName];
+        if (std::find(clients.begin(), clients.end(), clientFd) == clients.end()) {
+            clients.push_back(clientFd);
+        }
     }
+    clientLastChannel[clientFd] = channelName;
 
-    // Notify others in the channel
-    std::string joinMessage = ":" + clientNicknames[clientFd] + "!~" + clientNicknames[clientFd] + "@client.ip JOIN :" + channelName;
-    broadcastMessage(channelName, joinMessage, clientFd);
+    // Formatting and sending messages according to the IRC protocol
+    std::string clientNick = clientNicknames[clientFd]; // Assuming you have a way to retrieve the client's nickname
+    std::string host = "user@host"; // Placeholder, adjust as necessary
 
-    // If the channel already had a topic set, send it to the new member
+    // Confirm the JOIN to the client
+    sendMessage(clientFd, ":" + clientNick + "!" + host + " JOIN :" + channelName);
+
+    // If it's a new channel or has a topic, send the topic
     if (!channelTopics[channelName].empty()) {
-        sendMessage(clientFd, "332 " + clientNicknames[clientFd] + " " + channelName + " :" + channelTopics[channelName]);
+        sendMessage(clientFd, ": 332 " + clientNick + " " + channelName + " :" + channelTopics[channelName]);
     }
 
-    // Notify the new client of all members in the channel (including self)
-    for (size_t i = 0; i < channels[channelName].size(); ++i) {
-        int memberFd = channels[channelName][i];
-        sendMessage(clientFd, "353 " + clientNicknames[clientFd] + " = " + channelName + " :" + clientNicknames[memberFd]);
+    // Send the names list to the client
+    std::string namesList = ": 353 " + clientNick + " = " + channelName + " :";
+    for (std::vector<int>::const_iterator it = channels[channelName].begin(); it != channels[channelName].end(); ++it) {
+        namesList += clientNicknames[*it] + " ";
     }
-    sendMessage(clientFd, "366 " + clientNicknames[clientFd] + " " + channelName + " :End of /NAMES list.");
+    // Trim the trailing space
+    if (!namesList.empty()) namesList.resize(namesList.length() - 1);
+    sendMessage(clientFd, namesList);
+    sendMessage(clientFd, ": 366 " + clientNick + " " + channelName + " :End of /NAMES list.");
+
+    // Notify other members in the channel about the new joiner
+    for (std::vector<int>::const_iterator it = channels[channelName].begin(); it != channels[channelName].end(); ++it) {
+        if (*it != clientFd) {
+            sendMessage(*it, ":" + clientNick + "!" + host + " JOIN :" + channelName);
+        }
+    }
+
+    // If the client is the first in the channel (channel operator), send mode change
+    if (isNewChannel) {
+        sendMessage(clientFd, ": MODE " + channelName + " +o " + clientNick);
+    }
 }
 
 
