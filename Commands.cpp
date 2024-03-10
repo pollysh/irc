@@ -1,5 +1,14 @@
 #include "Server.hpp"
 
+void Server::showMessage(const std::string& channelName, const std::string& message) {
+    if (channels.find(channelName) != channels.end()) {
+        std::vector<int>& clients = channels[channelName];
+        for (size_t i = 0; i < clients.size(); ++i) {
+            sendMessage(clients[i], message);
+        }
+    }
+}
+
 int Server::getClientFdFromNickname(const std::string& targetNickname) {
     std::map<int, std::string>::const_iterator it;
     for (it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
@@ -95,74 +104,80 @@ bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel)
 
 
 void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password, const std::string& targetNickname) {
-    // Ensure the channel exists
-    if (channels.find(channel) == channels.end()) {
-        sendMessage(clientFd, "ERROR :No such channel.");
-        return;
-    }
-
-    // Check operator status
+    
     if (!isClientOperatorOfChannel(clientFd, channel)) {
-        sendMessage(clientFd, "ERROR :You're not channel operator.");
-        return;
+            sendMessage(clientFd, "Error: You must be an operator to change this mode.");
+            return;
     }
 
-    // Process mode changes
     if (mode == "i") {
-        // Invite-only mode
         channelInviteOnly[channel] = set;
-        sendMessage(clientFd, "MODE " + channel + (set ? " +i" : " -i"));
+        std::string modeStatus = set ? "enabled" : "disabled";
+        sendMessage(clientFd, "Invite-only mode for " + channel + " has been " + modeStatus + ".");
+        
+        showMessage(channel, "The channel " + channel + " is now in invite-only mode: " + modeStatus);
     } else if (mode == "t") {
-        // Topic protection mode
         channelOperatorRestrictions[channel] = set;
-        sendMessage(clientFd, "MODE " + channel + (set ? " +t" : " -t"));
+        std::string status = set ? "enabled" : "disabled";
+        sendMessage(clientFd, "Operator restrictions for " + channel + " are now " + status + ".");
+        showMessage(channel, "The channel " + channel + " now has operator restrictions " + status + ".");
     } else if (mode == "k") {
-        // Password (key) mode
         if (set && !password.empty()) {
             channelPasswords[channel] = password;
-            sendMessage(clientFd, "MODE " + channel + " +k");
+            sendMessage(clientFd, "Password for " + channel + " has been set.");
+            showMessage(channel, "A password is now required to join " + channel + ".");
         } else if (!set) {
             channelPasswords.erase(channel);
-            sendMessage(clientFd, "MODE " + channel + " -k");
+            sendMessage(clientFd, "Password for " + channel + " has been removed.");
+            showMessage(channel, channel + " no longer requires a password to join.");
         } else {
-            sendMessage(clientFd, "ERROR :Password required to set +k mode.");
-            return;
+            sendMessage(clientFd, "Error: A password is required to set the channel key.");
         }
     } else if (mode == "l") {
-        // User limit mode
         if (set) {
-            int limit;
-            std::istringstream(password) >> limit;
-            if (limit > 0) {
+            try {
+                int limit = std::stoi(password);
                 channelUserLimits[channel] = limit;
-                sendMessage(clientFd, "MODE " + channel + " +l " + password);
-            } else {
-                sendMessage(clientFd, "ERROR :Invalid limit for mode +l.");
+                sendMessage(clientFd, "User limit for " + channel + " has been set to " + std::to_string(limit) + ".");
+            } catch (const std::invalid_argument& ia) {
+                sendMessage(clientFd, "Error: Invalid user limit provided.");
+            } catch (const std::out_of_range& oor) {
+                sendMessage(clientFd, "Error: User limit is out of range.");
             }
         } else {
             channelUserLimits.erase(channel);
-            sendMessage(clientFd, "MODE " + channel + " -l");
+            sendMessage(clientFd, "User limit for " + channel + " has been removed.");
         }
-    } else if (mode == "o") {
-        // Operator status
+    } else if (mode == "o"){
+        if (channels.find(channel) == channels.end()) {
+            sendMessage(clientFd, "Error: The specified channel does not exist.");
+            return;
+        }
+        std::cout << "Nickname: " << targetNickname << std::endl;
         int targetFd = getClientFdFromNickname(targetNickname);
         if (targetFd == -1) {
-            sendMessage(clientFd, "ERROR :No such nick/channel.");
+            sendMessage(clientFd, "Error: User not found.");
+            return;
+        }
+
+        if (!isClientOperatorOfChannel(clientFd, channel)) {
+            sendMessage(clientFd, "Error: You are not an operator of the channel.");
+            return;
+        }
+
+        if (set) {
+            channelOperators[channel] = targetFd;
+            sendMessage(clientFd, targetNickname + " is now an operator of " + channel + ".");
         } else {
-            if (set) {
-                channelOperators[channel] = targetFd;
-                sendMessage(clientFd, "MODE " + channel + " +o " + targetNickname);
+            if (channelOperators[channel] == targetFd) { 
+                channelOperators[channel] = -1;
+                sendMessage(clientFd, targetNickname + " is no longer an operator of " + channel + ".");
             } else {
-                if (channelOperators[channel] == targetFd) {
-                    channelOperators.erase(channel); // Removing operator status
-                    sendMessage(clientFd, "MODE " + channel + " -o " + targetNickname);
-                } else {
-                    sendMessage(clientFd, "ERROR :" + targetNickname + " is not an operator.");
-                }
+                sendMessage(clientFd, "Error: " + targetNickname + " is not an operator of the channel.");
             }
         }
     } else {
-        sendMessage(clientFd, "ERROR :Unknown MODE flag");
+        sendMessage(clientFd, "Error: Unsupported mode.");
     }
 }
 

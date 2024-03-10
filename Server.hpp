@@ -77,4 +77,5 @@ public:
     void userCmd(int clientFd, const std::string& command);
     void receiveData(int clientFd, const std::string& data);
     std::string trim(const std::string& str);
+    void showMessage(const std::string& channelName, const std::string& message);
 };
