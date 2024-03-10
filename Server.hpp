@@ -59,7 +59,7 @@ public:
     void processCommand(int clientFd, const std::string& command);
     void sendMessage(int clientFd, const std::string& message);
     void joinChannel(int clientFd, const std::string& channelName, const std::string& password);
-    void broadcastMessage(const std::string& channelName, const std::string& message);
+    void broadcastMessage(const std::string& channelName, const std::string& message, int excludeFd);
     void processClientMessage(int clientFd, const std::string& message);
     void sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message);
     void acceptNewConnection();

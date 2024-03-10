@@ -95,80 +95,74 @@ bool Server::isClientOperatorOfChannel(int clientFd, const std::string& channel)
 
 
 void Server::modeCmd(int clientFd, const std::string& channel, const std::string& mode, bool set, const std::string& password, const std::string& targetNickname) {
-    
-    if (!isClientOperatorOfChannel(clientFd, channel)) {
-            sendMessage(clientFd, "Error: You must be an operator to change this mode.");
-            return;
+    // Ensure the channel exists
+    if (channels.find(channel) == channels.end()) {
+        sendMessage(clientFd, "ERROR :No such channel.");
+        return;
     }
 
+    // Check operator status
+    if (!isClientOperatorOfChannel(clientFd, channel)) {
+        sendMessage(clientFd, "ERROR :You're not channel operator.");
+        return;
+    }
+
+    // Process mode changes
     if (mode == "i") {
+        // Invite-only mode
         channelInviteOnly[channel] = set;
-        std::string modeStatus = set ? "enabled" : "disabled";
-        sendMessage(clientFd, "Invite-only mode for " + channel + " has been " + modeStatus + ".");
-        
-        broadcastMessage(channel, "The channel " + channel + " is now in invite-only mode: " + modeStatus);
+        sendMessage(clientFd, "MODE " + channel + (set ? " +i" : " -i"));
     } else if (mode == "t") {
+        // Topic protection mode
         channelOperatorRestrictions[channel] = set;
-        std::string status = set ? "enabled" : "disabled";
-        sendMessage(clientFd, "Operator restrictions for " + channel + " are now " + status + ".");
-        broadcastMessage(channel, "The channel " + channel + " now has operator restrictions " + status + ".");
+        sendMessage(clientFd, "MODE " + channel + (set ? " +t" : " -t"));
     } else if (mode == "k") {
+        // Password (key) mode
         if (set && !password.empty()) {
             channelPasswords[channel] = password;
-            sendMessage(clientFd, "Password for " + channel + " has been set.");
-            broadcastMessage(channel, "A password is now required to join " + channel + ".");
+            sendMessage(clientFd, "MODE " + channel + " +k");
         } else if (!set) {
             channelPasswords.erase(channel);
-            sendMessage(clientFd, "Password for " + channel + " has been removed.");
-            broadcastMessage(channel, channel + " no longer requires a password to join.");
+            sendMessage(clientFd, "MODE " + channel + " -k");
         } else {
-            sendMessage(clientFd, "Error: A password is required to set the channel key.");
+            sendMessage(clientFd, "ERROR :Password required to set +k mode.");
+            return;
         }
     } else if (mode == "l") {
+        // User limit mode
         if (set) {
-            try {
-                int limit = std::stoi(password);
+            int limit;
+            std::istringstream(password) >> limit;
+            if (limit > 0) {
                 channelUserLimits[channel] = limit;
-                sendMessage(clientFd, "User limit for " + channel + " has been set to " + std::to_string(limit) + ".");
-            } catch (const std::invalid_argument& ia) {
-                sendMessage(clientFd, "Error: Invalid user limit provided.");
-            } catch (const std::out_of_range& oor) {
-                sendMessage(clientFd, "Error: User limit is out of range.");
+                sendMessage(clientFd, "MODE " + channel + " +l " + password);
+            } else {
+                sendMessage(clientFd, "ERROR :Invalid limit for mode +l.");
             }
         } else {
             channelUserLimits.erase(channel);
-            sendMessage(clientFd, "User limit for " + channel + " has been removed.");
+            sendMessage(clientFd, "MODE " + channel + " -l");
         }
-    } else if (mode == "o"){
-        if (channels.find(channel) == channels.end()) {
-            sendMessage(clientFd, "Error: The specified channel does not exist.");
-            return;
-        }
-        std::cout << "Nickname: " << targetNickname << std::endl;
+    } else if (mode == "o") {
+        // Operator status
         int targetFd = getClientFdFromNickname(targetNickname);
         if (targetFd == -1) {
-            sendMessage(clientFd, "Error: User not found.");
-            return;
-        }
-
-        if (!isClientOperatorOfChannel(clientFd, channel)) {
-            sendMessage(clientFd, "Error: You are not an operator of the channel.");
-            return;
-        }
-
-        if (set) {
-            channelOperators[channel] = targetFd;
-            sendMessage(clientFd, targetNickname + " is now an operator of " + channel + ".");
+            sendMessage(clientFd, "ERROR :No such nick/channel.");
         } else {
-            if (channelOperators[channel] == targetFd) { 
-                channelOperators[channel] = -1;
-                sendMessage(clientFd, targetNickname + " is no longer an operator of " + channel + ".");
+            if (set) {
+                channelOperators[channel] = targetFd;
+                sendMessage(clientFd, "MODE " + channel + " +o " + targetNickname);
             } else {
-                sendMessage(clientFd, "Error: " + targetNickname + " is not an operator of the channel.");
+                if (channelOperators[channel] == targetFd) {
+                    channelOperators.erase(channel); // Removing operator status
+                    sendMessage(clientFd, "MODE " + channel + " -o " + targetNickname);
+                } else {
+                    sendMessage(clientFd, "ERROR :" + targetNickname + " is not an operator.");
+                }
             }
         }
     } else {
-        sendMessage(clientFd, "Error: Unsupported mode.");
+        sendMessage(clientFd, "ERROR :Unknown MODE flag");
     }
 }
 
@@ -191,7 +185,7 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
             channelTopics[channel] = newTopic;
             sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
             if (!restrictionsActive) {
-                broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic);
+                broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic, clientFd);
             }
         }
     } else {
@@ -200,71 +194,68 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 }
 
 void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
+    // Check for valid channel name
+    if (channelName.empty() || channelName[0] != '#') {
+        sendMessage(clientFd, "ERROR :Invalid channel name. Channel names must start with '#'.");
+        return;
+    }
 
+    // Ensure nickname is set
+    if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
+        sendMessage(clientFd, "ERROR :You must set a nickname before joining a channel.");
+        return;
+    }
+
+    // Invite-only and password checks
     bool isInviteOnly = channelInviteOnly.find(channelName) != channelInviteOnly.end() && channelInviteOnly[channelName];
     bool isInvited = channelInvitations[channelName].find(clientFd) != channelInvitations[channelName].end();
-
     if (isInviteOnly && !isInvited) {
-        sendMessage(clientFd, "Error: " + channelName + " is invite-only, and you're not invited.");
+        sendMessage(clientFd, "ERROR :" + channelName + " is invite-only, and you're not invited.");
+        return;
+    }
+    if (channelPasswords.find(channelName) != channelPasswords.end() && channelPasswords[channelName] != password) {
+        sendMessage(clientFd, "ERROR :Incorrect password for " + channelName + ".");
         return;
     }
 
-    if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
-        std::cerr << "Client " << clientFd << " attempted to join a channel without setting a nickname." << std::endl;
-        sendMessage(clientFd, "You must set a nickname before joining a channel.");
-        return;
-    }
-
-    if (channelPasswords.find(channelName) != channelPasswords.end()) {
-        if (channelPasswords[channelName] != password) {
-            sendMessage(clientFd, "Error: Incorrect password for " + channelName + ". Please provide the correct password.");
-            return;
-        }
-    }
-
+    // User limit check
     if (channels.find(channelName) != channels.end()) {
         std::vector<int>& clients = channels[channelName];
-        
         if (channelUserLimits.find(channelName) != channelUserLimits.end() && clients.size() >= channelUserLimits[channelName]) {
-            sendMessage(clientFd, "Error: User limit for " + channelName + " has been reached.");
+            sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.");
             return;
         }
     }
 
-    if (channelName.empty() || channelName[0] != '#') {
-        std::cerr << "Client " << clientFd << " attempted to join an invalid channel name: " << channelName << std::endl;
-        sendMessage(clientFd, "Invalid channel name. Channel names must start with a '#'.");
-        return;
-    }
-    
-    if (channels.find(channelName) == channels.end()) {
-        channels[channelName] = std::vector<int>();
-    } else {
-        std::vector<int>& clients = channels[channelName];
-        if (std::find(clients.begin(), clients.end(), clientFd) != clients.end()) {
-            sendMessage(clientFd, "You are already a member of " + channelName);
-            return;
-        }
-    }
-
+    // Join or create channel
+    bool isNewChannel = channels.find(channelName) == channels.end();
     channels[channelName].push_back(clientFd);
-    clientLastChannel[clientFd] = channelName; 
-    std::cout << "Client " << clientFd << " with nickname " << clientNicknames[clientFd] << " joined channel " << channelName << std::endl;
-    sendMessage(clientFd, "Welcome to " + channelName + "!");
-
+    clientLastChannel[clientFd] = channelName;
     
-    if (channels[channelName].size() == 1) {
-        channelOperators[channelName] = clientFd;
-        sendMessage(clientFd, "You are the operator of " + channelName + ".");
+    // Notify client of successful join
+    sendMessage(clientFd, "JOIN :" + channelName);
+    if (isNewChannel) {
+        channelOperators[channelName] = clientFd; // First member becomes operator
+        sendMessage(clientFd, "MODE " + channelName + " +o " + clientNicknames[clientFd]); // Notify client of operator status
     }
 
+    // Notify others in the channel
+    std::string joinMessage = ":" + clientNicknames[clientFd] + "!~" + clientNicknames[clientFd] + "@client.ip JOIN :" + channelName;
+    broadcastMessage(channelName, joinMessage, clientFd);
+
+    // If the channel already had a topic set, send it to the new member
+    if (!channelTopics[channelName].empty()) {
+        sendMessage(clientFd, "332 " + clientNicknames[clientFd] + " " + channelName + " :" + channelTopics[channelName]);
+    }
+
+    // Notify the new client of all members in the channel (including self)
     for (size_t i = 0; i < channels[channelName].size(); ++i) {
         int memberFd = channels[channelName][i];
-        if (memberFd != clientFd) {
-            sendMessage(memberFd, clientNicknames[clientFd] + " has joined the channel.");
-        }
+        sendMessage(clientFd, "353 " + clientNicknames[clientFd] + " = " + channelName + " :" + clientNicknames[memberFd]);
     }
+    sendMessage(clientFd, "366 " + clientNicknames[clientFd] + " " + channelName + " :End of /NAMES list.");
 }
+
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
     
@@ -324,7 +315,7 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
         if (std::find(clients.begin(), clients.end(), targetFd) != clients.end()) {
             clients.erase(std::remove(clients.begin(), clients.end(), targetFd), clients.end());
             sendMessage(targetFd, "You have been kicked from " + channel + ".");
-            broadcastMessage(channel, targetNickname + " has been kicked from the channel.");
+            broadcastMessage(channel, targetNickname + " has been kicked from the channel.", targetFd);
         } else {
             sendMessage(clientFd, "Error: User not in the specified channel.");
         }

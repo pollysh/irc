@@ -1,10 +1,11 @@
 #include "Server.hpp"
 
-void Server::broadcastMessage(const std::string& channelName, const std::string& message) {
-    if (channels.find(channelName) != channels.end()) {
-        std::vector<int>& clients = channels[channelName];
-        for (size_t i = 0; i < clients.size(); ++i) {
-            sendMessage(clients[i], message);
+void Server::broadcastMessage(const std::string& channelName, const std::string& message, int excludeFd) {
+    std::vector<int>& clients = channels[channelName];
+    for (size_t i = 0; i < clients.size(); ++i) {
+        int memberFd = clients[i];
+        if (memberFd != excludeFd) {
+            sendMessage(memberFd, message);
         }
     }
 }
