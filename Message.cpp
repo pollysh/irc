@@ -93,11 +93,9 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
     } else {
         std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
         if (it != clientLastChannel.end() && !it->second.empty()) {
-            // Client has a last joined channel; construct a PRIVMSG command for it
             std::string channel = it->second;
-            std::string messageToChannel = trimmedMessage; // Message is already trimmed
+            std::string messageToChannel = trimmedMessage; 
             
-            // Call sendMessageToChannel to send the message
             sendMessageToChannel(clientFd, channel, messageToChannel);
     } else {
             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
