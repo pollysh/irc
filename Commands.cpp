@@ -255,6 +255,9 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
             clients.push_back(clientFd);
         }
     }
+    if (std::find(clientChannels[clientFd].begin(), clientChannels[clientFd].end(), channelName) == clientChannels[clientFd].end()) {
+        clientChannels[clientFd].push_back(channelName);
+    }
     clientLastChannel[clientFd] = channelName;
 
     // Formatting and sending messages according to the IRC protocol

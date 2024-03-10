@@ -33,6 +33,7 @@ private:
     std::map<int, std::string> clientBuffers;
     std::map<int, std::string> clientLastChannel;
     std::map<std::string, int> channelOperators;
+    std::map<int, std::vector<std::string> > clientChannels;
     int server_fd;
     struct sockaddr_in server_addr;
     int portNum;
