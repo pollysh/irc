@@ -209,92 +209,76 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 }
 
 void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
-    // Check for valid channel name
+    // Basic validations
     if (channelName.empty() || channelName[0] != '#') {
-        sendMessage(clientFd, "ERROR :Invalid channel name. Channel names must start with '#'.");
+        sendMessage(clientFd, "ERROR :Invalid channel name. Channel names must start with '#'.\r\n");
         return;
     }
 
-    // Ensure nickname is set
+    // Ensure the client has set a nickname
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
-        sendMessage(clientFd, "ERROR :You must set a nickname before joining a channel.");
+        sendMessage(clientFd, "ERROR :You must set a nickname before joining a channel.\r\n");
         return;
     }
 
-    // Invite-only and password checks
-    bool isInviteOnly = channelInviteOnly.find(channelName) != channelInviteOnly.end() && channelInviteOnly[channelName];
-    bool isInvited = channelInvitations[channelName].find(clientFd) != channelInvitations[channelName].end();
+    // Handle invite-only and password checks
+    bool isInviteOnly = channelInviteOnly[channelName];
+    bool isInvited = channelInvitations[channelName].count(clientFd) > 0;
     if (isInviteOnly && !isInvited) {
-        sendMessage(clientFd, "ERROR :" + channelName + " is invite-only, and you're not invited.");
+        sendMessage(clientFd, "ERROR :" + channelName + " is invite-only, and you're not invited.\r\n");
         return;
     }
+
     if (channelPasswords.find(channelName) != channelPasswords.end() && channelPasswords[channelName] != password) {
-        sendMessage(clientFd, "ERROR :Incorrect password for " + channelName + ".");
+        sendMessage(clientFd, "ERROR :Incorrect password for " + channelName + ".\r\n");
         return;
     }
 
     // User limit check
-    if (channels.find(channelName) != channels.end()) {
-        std::vector<int>& clients = channels[channelName];
-        if (channelUserLimits.find(channelName) != channelUserLimits.end() && clients.size() >= channelUserLimits[channelName]) {
-            sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.");
-            return;
-        }
+    if (channels[channelName].size() >= channelUserLimits[channelName]) {
+        sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.\r\n");
+        return;
     }
 
-    // Determine if the channel exists and if the client is joining a new channel
-    bool isNewChannel = channels.find(channelName) == channels.end();
-    if (isNewChannel) {
-        // If it's a new channel, create it and set the joining client as the operator
+    // Add client to channel
+    bool isNewMember = std::find(channels[channelName].begin(), channels[channelName].end(), clientFd) == channels[channelName].end();
+    if (isNewMember) {
         channels[channelName].push_back(clientFd);
-        channelOperators[channelName] = clientFd; // First joiner becomes the channel operator
-    } else {
-        // If channel exists, just add the client if not already a member
-        std::vector<int>& clients = channels[channelName];
-        if (std::find(clients.begin(), clients.end(), clientFd) == clients.end()) {
-            clients.push_back(clientFd);
-        }
     }
-    if (std::find(clientChannels[clientFd].begin(), clientChannels[clientFd].end(), channelName) == clientChannels[clientFd].end()) {
-        clientChannels[clientFd].push_back(channelName);
-    }
-    clientLastChannel[clientFd] = channelName;
+    clientLastChannel[clientFd] = channelName; // Track the last channel joined by the client
 
-    // Formatting and sending messages according to the IRC protocol
-    std::string clientNick = clientNicknames[clientFd]; // Assuming you have a way to retrieve the client's nickname
-    std::string host = "user@host"; // Placeholder, adjust as necessary
+    // Send JOIN confirmation to the client
+    sendMessage(clientFd, ":" + clientNicknames[clientFd] + "!user@host JOIN :" + channelName + "\r\n");
 
-    // Confirm the JOIN to the client
-    sendMessage(clientFd, ":" + clientNick + "!" + host + " JOIN :" + channelName);
-
-    // If it's a new channel or has a topic, send the topic
+    // Send topic (if any)
     if (!channelTopics[channelName].empty()) {
-        sendMessage(clientFd, ": 332 " + clientNick + " " + channelName + " :" + channelTopics[channelName]);
+        sendMessage(clientFd, ":server 332 " + clientNicknames[clientFd] + " " + channelName + " :" + channelTopics[channelName] + "\r\n");
     }
 
-    // Send the names list to the client
-    std::string namesList = ": 353 " + clientNick + " = " + channelName + " :";
-    for (std::vector<int>::const_iterator it = channels[channelName].begin(); it != channels[channelName].end(); ++it) {
-        namesList += clientNicknames[*it] + " ";
+    // Send names list
+    std::string namesReply = ":server 353 " + clientNicknames[clientFd] + " = " + channelName + " :";
+    for (size_t i = 0; i < channels[channelName].size(); ++i) {
+        namesReply += clientNicknames[channels[channelName][i]] + " ";
     }
-    // Trim the trailing space
-    if (!namesList.empty()) namesList.resize(namesList.length() - 1);
-    sendMessage(clientFd, namesList);
-    sendMessage(clientFd, ": 366 " + clientNick + " " + channelName + " :End of /NAMES list.");
+    sendMessage(clientFd, namesReply + "\r\n");
+    sendMessage(clientFd, ":server 366 " + clientNicknames[clientFd] + " " + channelName + " :End of /NAMES list.\r\n");
 
-    // Notify other members in the channel about the new joiner
-    for (std::vector<int>::const_iterator it = channels[channelName].begin(); it != channels[channelName].end(); ++it) {
-        if (*it != clientFd) {
-            sendMessage(*it, ":" + clientNick + "!" + host + " JOIN :" + channelName);
+    // Notify other channel members (if the client is a new member)
+    if (isNewMember) {
+        std::string joinMsg = ":" + clientNicknames[clientFd] + "!user@host JOIN :" + channelName;
+        for (size_t i = 0; i < channels[channelName].size(); ++i) {
+            if (channels[channelName][i] != clientFd) { // Don't send the join message to the joining client
+                sendMessage(channels[channelName][i], joinMsg + "\r\n");
+            }
         }
     }
 
-    // If the client is the first in the channel (channel operator), send mode change
-    if (isNewChannel) {
-        sendMessage(clientFd, ": MODE " + channelName + " +o " + clientNick);
+    // Assign channel operator if necessary
+    if (channels[channelName].size() == 1 || channelOperators.find(channelName) == channelOperators.end()) {
+        channelOperators[channelName] = clientFd;
+        sendMessage(clientFd, ":server MODE " + channelName + " +o " + clientNicknames[clientFd] + "\r\n");
     }
 }
-
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
     
