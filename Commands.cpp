@@ -13,20 +13,30 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 void Server::nickCmd(int clientFd, const std::string& command) {
     std::istringstream iss(command);
     std::string cmd, nickname;
-    iss >> cmd >> nickname; // Extract the first word as the nickname
+    iss >> cmd; // Extract the command (e.g., "NICK")
 
-    // Consume any extra words to ignore them, ensuring only the first word is treated as the nickname
-    std::string extra;
-    iss >> extra;
-    if (!extra.empty()) {
-        sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
+    // Use a counter to check how many words are provided after the command
+    int wordCount = 0;
+    while (iss >> nickname) {
+        wordCount++;
+        if (wordCount > 1) {
+            // If more than one word is found, send an error and exit the function
+            sendMessage(clientFd, "Error: Nickname must be a single word without spaces.");
+            return;
+        }
+    }
+
+    // At this point, nickname contains the first word provided after "NICK"
+    if (wordCount == 0) {
+        // No nickname provided after the command
+        sendMessage(clientFd, "Error: Nickname cannot be empty.");
         return;
     }
 
-    // Check if the nickname already exists
+    // Check if the nickname already exists among connected clients
     bool nicknameExists = false;
-    for (const auto& nick : clientNicknames) {
-        if (nick.second == nickname) {
+    for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+        if (it->second == nickname) {
             nicknameExists = true;
             break;
         }
