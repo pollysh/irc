@@ -19,19 +19,14 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
     return -1;
 }
 
-void Server::nickCmd(int clientFd, const std::string& command) {
-    std::string nickname;
-    std::size_t pos = command.find(" ");
-    if (pos != std::string::npos) {
-        nickname = command.substr(pos + 1);
-        nickname.erase(std::remove(nickname.begin(), nickname.end(), '\n'), nickname.end());
-        nickname.erase(std::remove(nickname.begin(), nickname.end(), '\r'), nickname.end());
-    }
+bool Server::nickCmd(int clientFd, const std::string& command) {
+   
+    std::string nickname = command;
+    std::cout <<"Nickname: " << command << std::endl;
 
     if (!nickname.empty()) {
         if (nickname.find(' ') != std::string::npos) {
             sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
-            return;
         }
 
         bool nicknameExists = false;
@@ -48,10 +43,11 @@ void Server::nickCmd(int clientFd, const std::string& command) {
             clientNicknames[clientFd] = nickname;
             std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
             sendMessage(clientFd, "NICK :" + nickname);
+            return true;
         }
-    } else {
+    } else 
         sendMessage(clientFd, "Error: Nickname cannot be empty.");
-    }
+    return false;
 }
 
 void Server::userCmd(int clientFd, const std::string& command) {
@@ -219,6 +215,7 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 }
 
 void Server::joinChannel(int clientFd, const std::string &channelName, const std::string &password) {
+    (void)password;
     if (channelName.empty() || channelName[0] != '#') {
         sendNumericReply(clientFd, 403, "No such channel");
         return;

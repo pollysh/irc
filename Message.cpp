@@ -10,13 +10,22 @@ void Server::broadcastMessage(const std::string& channelName, const std::string&
     }
 }
 
-void Server::sendMessage(int clientFd, const std::string& message) {
+std::string Server::formatMessage(const std::string &senderNickname, const std::string &message)
+{
+    return (" " + senderNickname + " :" + message);
+}
+
+void Server::sendMessage(int clientFd, const std::string &message)
+{
     std::string formattedMessage = message;
-    // Ensure the message ends with \r\n (IRC protocol line endings)
-    if (!message.empty() && (message.length() < 2 || message.substr(message.length() - 2) != "\r\n")) {
+
+    std::cout << "Sending Message: " << formattedMessage << std::endl; // Ensure the message ends with \r\n (IRC protocol line endings)
+    if (!message.empty() && (message.length() < 2 || message.substr(message.length() - 2) != "\r\n"))
+    {
         formattedMessage += "\r\n";
     }
-    if (send(clientFd, formattedMessage.c_str(), formattedMessage.length(), 0) == -1) {
+    if (send(clientFd, formattedMessage.c_str(), formattedMessage.length(), 0) == -1)
+    {
         std::cerr << "Failed to send message to client " << clientFd << ": " << strerror(errno) << std::endl;
     }
 }
@@ -56,45 +65,80 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
     }
 }
 
-void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
+bool Server::processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss)
+{
+    static int auth = 0;
+   
+    std::string argm;
+        iss >> argm;
+    if (command == "PASS")
+    {
+        if (argm == serverPassword)
+            auth++;
+        else
+            sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
+    }
+    if (command == "NICK")
+        if (nickCmd(clientFd, argm))
+            auth++;
+
+    if (command == "USER")
+    {
+        userCmd(clientFd, argm);
+        auth++;
+    }
+    if (auth == 3)
+    {
+        std::string nick = clientNicknames[clientFd];
+        clientAuthenticated[clientFd] = true;
+        sendMessage(clientFd, ":Server 001" + formatMessage(nick, "Welcome. You are now authenticated."));
+        sendMessage(clientFd, ":Server 003" + formatMessage(nick, "For a list of commands, type /help."));
+        sendMessage(clientFd, ":Server 005" + formatMessage(nick, "CHANTYPES=#"));
+        sendMessage(clientFd, ":Server 005" + formatMessage(nick, "CHANMODES=i,t,k,o,l"));
+        return true;
+    }
+    return false;
+}
+
+void Server::processClientMessage(int clientFd, const std::string &rawMessage)
+{
     // Trim the message and split by spaces to identify the command and its parameters
     std::string trimmedMessage = trim(rawMessage);
     std::istringstream iss(trimmedMessage);
     std::string command;
-    iss >> command;
 
-    // Check if the client is not authenticated yet
-    if (!clientAuthenticated[clientFd]) {
-        if (command == "PASS") {
-            std::string providedPassword;
-            iss >> providedPassword;
-            if (providedPassword == serverPassword) {
-                clientAuthenticated[clientFd] = true;
-                sendMessage(clientFd, ":Server 001 :Password accepted. You are now authenticated.");
-                // Optionally, prompt the client for the next steps
-                sendMessage(clientFd, ":Server 002 :Please proceed with NICK and USER commands.");
-            } else {
-                sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
-            }
-        } else {
-            // If the client attempts any command other than PASS without being authenticated
-            sendMessage(clientFd, ":Server 464 :Authentication required. Please authenticate with the PASS command.");
+    std::cout << "Raw Message: " << rawMessage << std::endl;
+
+    if (!clientAuthenticated[clientFd])
+    {
+        while (iss >> command)
+        {
+            if (command == "PASS" || command == "NICK" || command == "USER")
+                processInitialCommand(clientFd, command, iss);
         }
-        return; // Stop further processing until authenticated
+        if (clientAuthenticated[clientFd])
+            return;
     }
 
+    iss >> command;
     // If authenticated, process other commands
     if (command == "JOIN" || command == "PRIVMSG" || command == "NICK" || command == "USER" ||
-        command == "KICK" || command == "INVITE" || command == "TOPIC" || command == "MODE") {
+        command == "KICK" || command == "INVITE" || command == "TOPIC" || command == "MODE")
+    {
         processCommand(clientFd, trimmedMessage);
-    } else {
-            std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
-        if (it != clientLastChannel.end() && !it->second.empty()) {
+    }
+    else
+    {
+        std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
+        if (it != clientLastChannel.end() && !it->second.empty())
+        {
             // If there's a last joined channel, forward the message there
             sendMessageToChannel(clientFd, it->second, trimmedMessage);
-        } else {
-            // Inform the client that they need to join a channel first
-            sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
         }
+        // else
+        // {
+        //     // Inform the client that they need to join a channel first
+        //     sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
+        // }
     }
 }

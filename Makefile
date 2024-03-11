@@ -1,12 +1,11 @@
 NAME = ircserv
-CC = c++
+CXX = c++
 
-FLAGS = -Wall -Wextra -Werror -std=c++98 -g -fsanitize=address
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -fsanitize=address
+LDFLAGS = -fsanitize=address
 
 SOURCES = Server.cpp Commands.cpp ProcessCmd.cpp Message.cpp main.cpp
-
 OBJECTS = $(SOURCES:.cpp=.o)
-
 EXECUTABLE = ircserv
 
 all: $(SOURCES) $(EXECUTABLE)
@@ -21,9 +20,9 @@ clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
 
 fclean: clean
-	@$(RM) $(NAME)
-	@echo "$(BYELLOW)$(NAME) $(BRED)REMOVED$(DEFAULT)"
+	rm -f $(NAME)
+	@echo "Executable removed"
 
 re: fclean all
 
-.PHONY: all clean
+.PHONY: all clean fclean re

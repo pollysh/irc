@@ -94,12 +94,13 @@ public:
     void sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message);
     int getClientFdFromNickname(const std::string& targetNickname);
     bool isClientOperatorOfChannel(int clientFd, const std::string& channel);
-    void nickCmd(int clientFd, const std::string& command);
+    bool nickCmd(int clientFd, const std::string& command);
     void userCmd(int clientFd, const std::string& command);
     void receiveData(int clientFd, const std::string& data);
     std::string trim(const std::string& str);
     void showMessage(const std::string& channelName, const std::string& message);
     void sendNumericReply(int clientFd, int numericCode, const std::string& message);
-    //void sendNamesList(const std::string& channelName, int clientFd);
+    std::string formatMessage(const std::string &senderNickname, const std::string &message);
+    bool processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss);
 
 };
