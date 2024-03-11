@@ -165,19 +165,17 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
         }
     } else if (mode == "l") {
         if (set) {
-            try {
-                int limit = std::atoi(password.c_str());
+            // Attempt to set user limit
+            int limit = std::atoi(password.c_str());
+            if (limit > 0) { // Assuming a limit of 0 or less is not valid
                 channelUserLimits[channel] = limit;
-                std::ostringstream convert;
-                convert << limit;
-                std::string limitAsString = convert.str();
-                sendMessage(clientFd, "User limit for " + channel + " has been set to " + limitAsString + ".");
-            } catch (const std::invalid_argument& ia) {
+                sendMessage(clientFd, "User limit for " + channel + " has been set to " + password + ".");
+            } else {
+             // Handle the case where the limit conversion did not result in a positive number
                 sendMessage(clientFd, "Error: Invalid user limit provided.");
-            } catch (const std::out_of_range& oor) {
-                sendMessage(clientFd, "Error: User limit is out of range.");
             }
         } else {
+            // Remove the user limit without requiring a numeric argument
             channelUserLimits.erase(channel);
             sendMessage(clientFd, "User limit for " + channel + " has been removed.");
         }
@@ -256,7 +254,6 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
 }
 
 void Server::joinChannel(int clientFd, const std::string &channelName, const std::string &password) {
-    (void)password;
     if (channelName.empty() || channelName[0] != '#') {
         sendNumericReply(clientFd, 403, "No such channel");
         return;
