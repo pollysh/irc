@@ -18,9 +18,7 @@ void Server::processCommand(int clientFd, const std::string& command) {
 
         if (!iss.eof()) {
             std::getline(iss, password);
-            if (!password.empty() && password[0] == ' ') {
-                password.erase(0, 1);
-            }
+            iss >> password;
         }
         joinChannel(clientFd, channel, password);
     } else if (cmd == "PRIVMSG") {
