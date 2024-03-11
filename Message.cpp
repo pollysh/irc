@@ -51,7 +51,7 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
     }
 
     // Format the message as per IRC standards
-    std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message;
+    std::string formattedMessage = ":" + senderNickname + "!user@host " + channel + " :" + message;
 
     // Broadcast the message to all channel members except the sender
     for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
@@ -68,33 +68,37 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
     std::string command;
     iss >> command;
 
-    // Handle PASS command for authentication
-    if (command == "PASS") {
-    std::string providedPassword;
-    iss >> providedPassword;
-    if (providedPassword == serverPassword) {
-        clientAuthenticated[clientFd] = true;
-        sendMessage(clientFd, ":Server 001 " + clientNicknames[clientFd] + " :Password accepted. You are now authenticated.");
-        // Prompt the client to send NICK and USER commands next.
-        sendMessage(clientFd, ":Server 001 " + clientNicknames[clientFd] + " :Please send your NICK and USER commands.");
-    } else {
-        sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
-    }
-    return;
+    // Check if the client is not authenticated yet
+    if (!clientAuthenticated[clientFd]) {
+        if (command == "PASS") {
+            std::string providedPassword;
+            iss >> providedPassword;
+            if (providedPassword == serverPassword) {
+                clientAuthenticated[clientFd] = true;
+                sendMessage(clientFd, ":Server 001 :Password accepted. You are now authenticated.");
+                // Optionally, prompt the client for the next steps
+                sendMessage(clientFd, ":Server 002 :Please proceed with NICK and USER commands.");
+            } else {
+                sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
+            }
+        } else {
+            // If the client attempts any command other than PASS without being authenticated
+            sendMessage(clientFd, ":Server 464 :Authentication required. Please authenticate with the PASS command.");
+        }
+        return; // Stop further processing until authenticated
     }
 
-    // Process recognized commands
+    // If authenticated, process other commands
     if (command == "JOIN" || command == "PRIVMSG" || command == "NICK" || command == "USER" ||
         command == "KICK" || command == "INVITE" || command == "TOPIC" || command == "MODE") {
         processCommand(clientFd, trimmedMessage);
     } else {
-        std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
+            std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
         if (it != clientLastChannel.end() && !it->second.empty()) {
-            std::string channel = it->second;
-            std::string messageToChannel = trimmedMessage; 
-            
-            sendMessageToChannel(clientFd, channel, messageToChannel);
-    } else {
+            // If there's a last joined channel, forward the message there
+            sendMessageToChannel(clientFd, it->second, trimmedMessage);
+        } else {
+            // Inform the client that they need to join a channel first
             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
         }
     }

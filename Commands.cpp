@@ -222,55 +222,56 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
     }
 }
 
-void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
-    // Basic validations
-    if (channelName.empty() || channelName[0] != '#') {
-        sendNumericReply(clientFd, ERR_NOSUCHCHANNEL, "No such channel");
-        return;
-    }
-
-    if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
-        sendNumericReply(clientFd, ERR_NONICKNAMEGIVEN, "No nickname given");
-        return;
-    }
-
-    // Additional checks for invite-only, password, and user limits would go here
-
-    bool isNewChannel = channels.find(channelName) == channels.end();
-    if (isNewChannel) {
+void Server::joinChannel(int clientFd, const std::string &channelName, const std::string &password) {
+    // Log channel creation if it's new
+    if (channels.find(channelName) == channels.end()) {
+        std::cout << "Channel created with id: " << channelName << std::endl;
         channels[channelName] = std::vector<int>();
-        channelOperators[channelName] = clientFd; // First user to join becomes operator
+        channelOperators[channelName] = clientFd; // First user to join becomes the channel operator
     }
 
-    std::vector<int>& members = channels[channelName];
-    if (std::find(members.begin(), members.end(), clientFd) == members.end()) {
-        members.push_back(clientFd);
-    }
-    clientLastChannel[clientFd] = channelName;
-
-    std::string clientNick = clientNicknames[clientFd];
-    sendMessage(clientFd, ":" + clientNick + "!user@host JOIN :" + channelName);
-
-    if (!channelTopics[channelName].empty()) {
-        sendNumericReply(clientFd, RPL_TOPIC, channelName + " :" + channelTopics[channelName]);
+    // Ensure the joining client has a nickname set
+    if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
+        sendNumericReply(clientFd, 431, "No nickname given");
+        return;
     }
 
-    std::string namesReply = channelName + " :";
-    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
-        namesReply += clientNicknames[*it] + " ";
-    }
-    sendNumericReply(clientFd, RPL_NAMREPLY, namesReply);
-    sendNumericReply(clientFd, RPL_ENDOFNAMES, channelName + " :End of /NAMES list.");
+    std::string nick = clientNicknames[clientFd];
+    std::string user = "@localhost"; // This should ideally be the user's username and host, but we'll use a placeholder.
 
-    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
-        if (*it != clientFd) {
-            sendMessage(*it, ":" + clientNick + "!user@host JOIN :" + channelName);
+    // Send JOIN message to the client
+    std::string joinMsg = ":" + nick + "!" + user + " JOIN :" + channelName;
+    std::cout << "Sending message: " << joinMsg << std::endl;
+    sendMessage(clientFd, joinMsg);
+
+    // If the channel is new or there are other members, notify them about the new member
+    if (!channels[channelName].empty()) {
+        for (size_t i = 0; i < channels[channelName].size(); ++i) {
+            sendMessage(channels[channelName][i], joinMsg);
         }
     }
 
-    if (isNewChannel) {
-        sendMessage(clientFd, "MODE " + channelName + " +o " + clientNick);
-    }
+    // Add client to channel's member list
+    channels[channelName].push_back(clientFd);
+    clientLastChannel[clientFd] = channelName; // Update the last channel joined by this client
+
+    // Send names list and end of names list
+    std::string namesMsg = ":localhost 353 " + nick + " = " + channelName + " :@" + nick;
+    std::cout << "Sending message: " << namesMsg << std::endl;
+    sendMessage(clientFd, namesMsg);
+
+    std::string endNamesMsg = ":localhost 366 " + nick + " " + channelName + " :End of /NAMES list";
+    std::cout << "Sending message: " << endNamesMsg << std::endl;
+    sendMessage(clientFd, endNamesMsg);
+
+    // Mode message (assuming mode +sn is default for new channels)
+    std::string modeMsg = "[5]MODE " + channelName + " +sn";
+    std::cout << modeMsg << std::endl; // Assuming you want this logged, not sent since it's not standard message format
+
+    // Placeholder for unsupported MODE flag response
+    std::string errorMsg = ":localhost 403 " + nick + " :Unknown MODE flag";
+    std::cout << "Sending message: " << errorMsg << std::endl;
+    sendMessage(clientFd, errorMsg);
 }
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {
