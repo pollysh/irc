@@ -120,8 +120,8 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
             if (command == "PASS" || command == "NICK" || command == "USER")
                 processInitialCommand(clientFd, command, iss);
         }
-        //if (clientAuthenticated[clientFd])
-            //return;
+        if (clientAuthenticated[clientFd])
+            return;
     }
 
     iss >> command;

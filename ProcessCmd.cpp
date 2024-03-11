@@ -6,7 +6,9 @@ void Server::processCommand(int clientFd, const std::string& command) {
     iss >> cmd;
 
     if (cmd == "NICK") {
-        nickCmd(clientFd, command);
+        std::string nickname;
+        iss >> nickname;
+        nickCmd(clientFd, nickname);
     } else if (cmd == "USER") {
         userCmd(clientFd, command);
     } else if (cmd == "JOIN") {
