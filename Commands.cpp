@@ -165,17 +165,14 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
         }
     } else if (mode == "l") {
         if (set) {
-            // Attempt to set user limit
             int limit = std::atoi(password.c_str());
-            if (limit > 0) { // Assuming a limit of 0 or less is not valid
+            if (limit > 0) {
                 channelUserLimits[channel] = limit;
                 sendMessage(clientFd, "User limit for " + channel + " has been set to " + password + ".");
             } else {
-             // Handle the case where the limit conversion did not result in a positive number
                 sendMessage(clientFd, "Error: Invalid user limit provided.");
             }
         } else {
-            // Remove the user limit without requiring a numeric argument
             channelUserLimits.erase(channel);
             sendMessage(clientFd, "User limit for " + channel + " has been removed.");
         }

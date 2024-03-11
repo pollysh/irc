@@ -84,11 +84,11 @@ void Server::processCommand(int clientFd, const std::string& command) {
             if (modeArg.size() > 1) {
                 std::string mode = modeArg.substr(1, 1);
             // Now process the mode
-            if (mode == "i" || mode == "t") {
+            if (mode == "i" || mode == "t" || mode == "l") {
 
                 modeCmd(clientFd, channel, mode, set);
             }
-            else if (mode == "o" || mode == "k" || mode == "l") {
+            else if (mode == "o" || mode == "k" ) {
                 std::string argument;
                 iss >> argument; 
                 if (argument.empty()) {
