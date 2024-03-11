@@ -393,25 +393,49 @@ std::string Server::trim(const std::string& str) {
 }
 
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
-    std::string lowerRecipientNickname = toLower(trim(recipientNickname));
+    std::string senderNickname = clientNicknames[senderFd];
 
-    int recipientFd = -1;
-    for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-        if (toLower(trim(it->second)) == lowerRecipientNickname) {
-            recipientFd = it->first;
-            break;
+    // Check if recipient is a channel
+    if (!recipientNickname.empty() && recipientNickname[0] == '#') {
+        // This is a channel
+        std::string channelName = recipientNickname; // Assuming recipientNickname contains the channel name
+        if (channels.find(channelName) != channels.end()) {
+            // Format the message for channel
+            std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + channelName + " :" + message;
+
+            // Iterate over all channel members and send them the message
+            std::vector<int>& members = channels[channelName];
+            for (size_t i = 0; i < members.size(); ++i) {
+                if (members[i] != senderFd) { // Don't send the message back to the sender
+                    sendMessage(members[i], formattedMessage);
+                }
+            }
+        } else {
+            // Channel not found
+            sendMessage(senderFd, "Error: Channel '" + channelName + "' not found.");
         }
-    }
-
-    if (recipientFd != -1) {
-        std::string senderNickname = clientNicknames[senderFd];
-        // Format the message according to IRC standards for PRIVMSG
-        std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + recipientNickname + " :" + message;
-        
-        // Send the formatted message to the recipient
-        sendMessage(recipientFd, formattedMessage);
     } else {
-        // Error handling for when the user is not found
-        sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
+        // This is a private message to a user
+        std::string lowerRecipientNickname = toLower(trim(recipientNickname));
+        int recipientFd = -1;
+
+        // Find the recipient's file descriptor based on nickname
+        for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
+            if (toLower(trim(it->second)) == lowerRecipientNickname) {
+                recipientFd = it->first;
+                break;
+            }
+        }
+
+        if (recipientFd != -1) {
+            // Format the message according to IRC standards for PRIVMSG to a user
+            std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + recipientNickname + " :" + message;
+            
+            // Send the formatted message to the recipient
+            sendMessage(recipientFd, formattedMessage);
+        } else {
+            // User not found
+            sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
+        }
     }
 }

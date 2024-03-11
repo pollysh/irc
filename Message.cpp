@@ -30,43 +30,58 @@ void Server::sendMessage(int clientFd, const std::string &message)
     }
 }
 
+void Server::redirectMessageToOtherChannel(int clientFd, const std::string& message) {
+    bool messageRedirected = false;
+    for (std::map<std::string, std::vector<int> >::iterator it = channels.begin(); it != channels.end(); ++it) {
+        std::vector<int>& members = it->second;
+        if (std::find(members.begin(), members.end(), clientFd) != members.end()) {
+            sendMessageToChannel(clientFd, it->first, message);
+            messageRedirected = true;
+            break;
+        }
+    }
+
+    if (!messageRedirected) {
+        sendMessage(clientFd, "ERROR: You're not a member of any channel.\r\n");
+    }
+}
+
+std::string Server::formatMessageForChannel(int clientFd, const std::string& channel, const std::string& message) {
+    // Retrieve the sender's nickname from the client ID
+    std::string senderNickname = "Unknown"; // Default nickname if not found
+    if(clientNicknames.find(clientFd) != clientNicknames.end()) {
+        senderNickname = clientNicknames[clientFd]; // Found the nickname
+    }
+
+    // Format the message as per IRC standards: ":<sender>!user@host PRIVMSG <channel> :<message>"
+    std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message;
+
+    return formattedMessage;
+}
+
+
 void Server::sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message) {
     if (channels.find(channel) == channels.end()) {
         sendMessage(clientFd, "ERROR :No such channel.\r\n");
         return;
     }
 
-    if (clientNicknames.find(clientFd) == clientNicknames.end()) {
-        // This checks if the client has a nickname set, implying they've registered properly.
-        sendMessage(clientFd, "ERROR :You're not registered.\r\n");
+    std::vector<int>& members = channels[channel];
+    if (std::find(members.begin(), members.end(), clientFd) == members.end()) {
+        // Client is not a member of the specified channel, attempt to redirect the message
+        redirectMessageToOtherChannel(clientFd, message);
         return;
     }
 
-    std::string senderNickname = clientNicknames[clientFd];
-    std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message + "\r\n";
-
-    // Check if the client is part of the channel
-    bool isMember = false;
-    std::vector<int>& members = channels[channel];
+    // Proceed to send the message to the channel as usual
+    std::string formattedMessage = formatMessageForChannel(clientFd, channel, message);
     for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
-        if (*it == clientFd) {
-            isMember = true;
-            break; // Client is in the channel
-        }
-    }
-
-    if (!isMember) {
-        sendMessage(clientFd, "ERROR :You're not a member of channel " + channel + ".\r\n");
-        return; // Stop execution if the client is not a member of the channel
-    }
-
-    // Send message to all members of the channel except the sender
-    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
-        if (*it != clientFd) { // Don't send the message to the sender
+        if (*it != clientFd) {
             sendMessage(*it, formattedMessage);
         }
     }
 }
+
 
 bool Server::processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss)
 {
