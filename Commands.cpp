@@ -264,6 +264,11 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         sendNumericReply(clientFd, 473, channelName + " :Cannot join channel (+i) - invite only");
         return;
     }
+
+    std::cout << "Attempting to join channel " << channelName 
+          << " with password: '" << password 
+          << "' (expected: '" << channelPasswords[channelName] << "')" << std::endl;
+
     if (!channelPasswords[channelName].empty() && password != channelPasswords[channelName]) {
         sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+k) - wrong channel key");
         return;
