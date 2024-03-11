@@ -74,20 +74,26 @@ bool Server::processInitialCommand(int clientFd, const std::string &command, std
     if (command == "PASS")
     {
         if (argm == serverPassword)
+        {
+            clientAuthenticated[clientFd] = true;
             auth++;
+            sendMessage(clientFd, ":yeeey");
+        }
         else
             sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
     }
-    if (command == "NICK")
+    else if (command == "NICK")
+    {
+        sendMessage(clientFd, ":GRUMPY POLINA");
         if (nickCmd(clientFd, argm))
             auth++;
-
-    if (command == "USER")
+    }
+    else if (command == "USER")
     {
         userCmd(clientFd, argm);
         auth++;
     }
-    if (auth == 3)
+    else if (auth == 3)
     {
         std::string nick = clientNicknames[clientFd];
         clientAuthenticated[clientFd] = true;
@@ -114,8 +120,8 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
             if (command == "PASS" || command == "NICK" || command == "USER")
                 processInitialCommand(clientFd, command, iss);
         }
-        if (clientAuthenticated[clientFd])
-            return;
+        //if (clientAuthenticated[clientFd])
+            //return;
     }
 
     iss >> command;
