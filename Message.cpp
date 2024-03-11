@@ -70,21 +70,17 @@ void Server::processClientMessage(int clientFd, const std::string& rawMessage) {
 
     // Handle PASS command for authentication
     if (command == "PASS") {
-        std::string providedPassword;
-        iss >> providedPassword;
-        if (providedPassword == serverPassword) {
-            clientAuthenticated[clientFd] = true;
-            sendMessage(clientFd, ":Server 001 :Password accepted. You are now authenticated.");
-        } else {
-            sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
-        }
-        return;
+    std::string providedPassword;
+    iss >> providedPassword;
+    if (providedPassword == serverPassword) {
+        clientAuthenticated[clientFd] = true;
+        sendMessage(clientFd, ":Server 001 " + clientNicknames[clientFd] + " :Password accepted. You are now authenticated.");
+        // Prompt the client to send NICK and USER commands next.
+        sendMessage(clientFd, ":Server 001 " + clientNicknames[clientFd] + " :Please send your NICK and USER commands.");
+    } else {
+        sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
     }
-
-    // Require authentication for any further commands
-    if (!clientAuthenticated[clientFd]) {
-        sendMessage(clientFd, ":Server 464 :Please authenticate with the PASS command.");
-        return;
+    return;
     }
 
     // Process recognized commands

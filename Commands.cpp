@@ -181,102 +181,95 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
     }
 }
 
+void Server::sendNumericReply(int clientFd, int numericCode, const std::string& message) {
+    std::ostringstream ss;
+    std::string clientNick = clientNicknames[clientFd].empty() ? "*" : clientNicknames[clientFd];
+
+    // Format: ":ServerName NumericCode ClientNick :Message"
+    // ServerName can be a placeholder if you don't have a specific name for your server.
+    // Numeric codes should be padded to three digits.
+    ss << ":Server " << std::setw(3) << std::setfill('0') << numericCode << " " << clientNick << " :" << message << "\r\n";
+
+    std::string formattedMessage = ss.str();
+    sendMessage(clientFd, formattedMessage);
+}
+
 void Server::topicCmd(int clientFd, const std::string& channel, const std::string& newTopic) {
     if (channels.find(channel) == channels.end()) {
-        sendMessage(clientFd, "Error: The specified channel does not exist.");
+        sendNumericReply(clientFd, ERR_NOSUCHCHANNEL, channel + " :No such channel");
         return;
     }
 
     bool restrictionsActive = channelOperatorRestrictions.count(channel) ? channelOperatorRestrictions[channel] : true;
-    bool isOperator = (channelOperators.count(channel) && channelOperators[channel] == clientFd);
+    bool isOperator = channelOperators.count(channel) && channelOperators[channel] == clientFd;
 
     if (!restrictionsActive || isOperator) {
         if (newTopic.empty()) {
             std::string currentTopic = channelTopics[channel];
-            sendMessage(clientFd, currentTopic.empty() ? "No topic is set for " + channel + "." : 
-                "Current topic for " + channel + ": " + currentTopic);
-        } else {
-            // Changing the topic
-            channelTopics[channel] = newTopic;
-            sendMessage(clientFd, "Topic for " + channel + " updated to: " + newTopic);
-            if (!restrictionsActive) {
-                broadcastMessage(channel, clientNicknames[clientFd] + " has changed the topic to: " + newTopic, clientFd);
+            if (currentTopic.empty()) {
+                sendNumericReply(clientFd, RPL_NOTOPIC, channel + " :No topic is set");
+            } else {
+                sendNumericReply(clientFd, RPL_TOPIC, channel + " :" + currentTopic);
             }
+        } else {
+            channelTopics[channel] = newTopic;
+            // Broadcast the topic change to all channel members
+            std::string topicChangeMsg = ":" + clientNicknames[clientFd] + "!user@host TOPIC " + channel + " :" + newTopic;
+            broadcastMessage(channel, topicChangeMsg, -1); // Assuming broadcastMessage skips sending to excludeFd if it's -1
         }
     } else {
-        sendMessage(clientFd, "Error: Operator restrictions are in place. Only the operator can view or change the topic.");
+        sendNumericReply(clientFd, ERR_CHANOPRIVSNEEDED, channel + " :You're not channel operator");
     }
 }
 
 void Server::joinChannel(int clientFd, const std::string& channelName, const std::string& password) {
     // Basic validations
     if (channelName.empty() || channelName[0] != '#') {
-        sendMessage(clientFd, "ERROR :Invalid channel name. Channel names must start with '#'.\r\n");
+        sendNumericReply(clientFd, ERR_NOSUCHCHANNEL, "No such channel");
         return;
     }
 
-    // Ensure the client has set a nickname
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
-        sendMessage(clientFd, "ERROR :You must set a nickname before joining a channel.\r\n");
+        sendNumericReply(clientFd, ERR_NONICKNAMEGIVEN, "No nickname given");
         return;
     }
 
-    // Handle invite-only and password checks
-    bool isInviteOnly = channelInviteOnly[channelName];
-    bool isInvited = channelInvitations[channelName].count(clientFd) > 0;
-    if (isInviteOnly && !isInvited) {
-        sendMessage(clientFd, "ERROR :" + channelName + " is invite-only, and you're not invited.\r\n");
-        return;
+    // Additional checks for invite-only, password, and user limits would go here
+
+    bool isNewChannel = channels.find(channelName) == channels.end();
+    if (isNewChannel) {
+        channels[channelName] = std::vector<int>();
+        channelOperators[channelName] = clientFd; // First user to join becomes operator
     }
 
-    if (channelPasswords.find(channelName) != channelPasswords.end() && channelPasswords[channelName] != password) {
-        sendMessage(clientFd, "ERROR :Incorrect password for " + channelName + ".\r\n");
-        return;
+    std::vector<int>& members = channels[channelName];
+    if (std::find(members.begin(), members.end(), clientFd) == members.end()) {
+        members.push_back(clientFd);
     }
+    clientLastChannel[clientFd] = channelName;
 
-    // User limit check
-    //if (channels[channelName].size() >= channelUserLimits[channelName]) {
-      //  sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.\r\n");
-        //return;
-    //}
+    std::string clientNick = clientNicknames[clientFd];
+    sendMessage(clientFd, ":" + clientNick + "!user@host JOIN :" + channelName);
 
-    // Add client to channel
-    bool isNewMember = std::find(channels[channelName].begin(), channels[channelName].end(), clientFd) == channels[channelName].end();
-    if (isNewMember) {
-        channels[channelName].push_back(clientFd);
-    }
-    clientLastChannel[clientFd] = channelName; // Track the last channel joined by the client
-
-    // Send JOIN confirmation to the client
-    sendMessage(clientFd, ":" + clientNicknames[clientFd] + "!user@host JOIN :" + channelName + "\r\n");
-
-    // Send topic (if any)
     if (!channelTopics[channelName].empty()) {
-        sendMessage(clientFd, ":server 332 " + clientNicknames[clientFd] + " " + channelName + " :" + channelTopics[channelName] + "\r\n");
+        sendNumericReply(clientFd, RPL_TOPIC, channelName + " :" + channelTopics[channelName]);
     }
 
-    // Send names list
-    std::string namesReply = ":server 353 " + clientNicknames[clientFd] + " = " + channelName + " :";
-    for (size_t i = 0; i < channels[channelName].size(); ++i) {
-        namesReply += clientNicknames[channels[channelName][i]] + " ";
+    std::string namesReply = channelName + " :";
+    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
+        namesReply += clientNicknames[*it] + " ";
     }
-    sendMessage(clientFd, namesReply + "\r\n");
-    sendMessage(clientFd, ":server 366 " + clientNicknames[clientFd] + " " + channelName + " :End of /NAMES list.\r\n");
+    sendNumericReply(clientFd, RPL_NAMREPLY, namesReply);
+    sendNumericReply(clientFd, RPL_ENDOFNAMES, channelName + " :End of /NAMES list.");
 
-    // Notify other channel members (if the client is a new member)
-    if (isNewMember) {
-        std::string joinMsg = ":" + clientNicknames[clientFd] + "!user@host JOIN :" + channelName;
-        for (size_t i = 0; i < channels[channelName].size(); ++i) {
-            if (channels[channelName][i] != clientFd) { // Don't send the join message to the joining client
-                sendMessage(channels[channelName][i], joinMsg + "\r\n");
-            }
+    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
+        if (*it != clientFd) {
+            sendMessage(*it, ":" + clientNick + "!user@host JOIN :" + channelName);
         }
     }
 
-    // Assign channel operator if necessary
-    if (channels[channelName].size() == 1 || channelOperators.find(channelName) == channelOperators.end()) {
-        channelOperators[channelName] = clientFd;
-        sendMessage(clientFd, ":server MODE " + channelName + " +o " + clientNicknames[clientFd] + "\r\n");
+    if (isNewChannel) {
+        sendMessage(clientFd, "MODE " + channelName + " +o " + clientNick);
     }
 }
 

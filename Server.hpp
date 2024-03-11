@@ -17,11 +17,31 @@
 #include <set>
 #include <errno.h>
 #include <algorithm>
+#include <iomanip>
 
 #define MAX_CLIENTS 1024
 #define MAX_PORT 65535
 #define MIN_PORT 1023
 #define BUFFER_SIZE 1024
+const int ERR_NOSUCHCHANNEL = 403;
+const int RPL_NOTOPIC = 331;
+const int RPL_TOPIC = 332;
+const int ERR_CHANOPRIVSNEEDED = 482;
+#define RPL_TOPIC 332
+#define RPL_NAMREPLY 353
+#define RPL_ENDOFNAMES 366
+#define ERR_NOSUCHNICK 401
+#define ERR_NOSUCHCHANNEL 403
+#define ERR_CANNOTSENDTOCHAN 404
+#define ERR_NONICKNAMEGIVEN 431
+#define ERR_ERRONEUSNICKNAME 432
+#define ERR_NICKNAMEINUSE 433
+#define ERR_NOTONCHANNEL 442
+#define ERR_NOTREGISTERED 451
+#define RPL_TOPIC 332
+#define RPL_NAMREPLY 353
+#define RPL_ENDOFNAMES 366
+
 
 class Server {
 private:
@@ -79,4 +99,7 @@ public:
     void receiveData(int clientFd, const std::string& data);
     std::string trim(const std::string& str);
     void showMessage(const std::string& channelName, const std::string& message);
+    void sendNumericReply(int clientFd, int numericCode, const std::string& message);
+    //void sendNamesList(const std::string& channelName, int clientFd);
+
 };
