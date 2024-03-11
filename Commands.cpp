@@ -262,6 +262,22 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         return;
     }
 
+    // Check for invite-only and password requirements
+    if (channelInviteOnly[channelName] && channelInvitations[channelName].find(clientFd) == channelInvitations[channelName].end()) {
+        sendNumericReply(clientFd, 473, channelName + " :Cannot join channel (+i) - invite only");
+        return;
+    }
+    if (!channelPasswords[channelName].empty() && password != channelPasswords[channelName]) {
+        sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+k) - wrong channel key");
+        return;
+    }
+
+    // Check for user limit
+    if (channelUserLimits[channelName] > 0 && channels[channelName].size() >= static_cast<size_t>(channelUserLimits[channelName])) {
+        sendNumericReply(clientFd, 471, channelName + " :Cannot join channel (+l) - channel is full");
+        return;
+    }
+
     if (clientNicknames.find(clientFd) == clientNicknames.end() || clientNicknames[clientFd].empty()) {
         sendNumericReply(clientFd, 431, "No nickname given");
         return;
@@ -271,6 +287,12 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
     if (!isNewChannel && std::find(channels[channelName].begin(), channels[channelName].end(), clientFd) != channels[channelName].end()) {
         return; 
     }
+
+    if (channelInviteOnly[channelName] && password != channelPasswords[channelName]) {
+        sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+i) - wrong password or invite required");
+        return;
+    }
+
 
     if (isNewChannel) {
         channels[channelName] = std::vector<int>();
