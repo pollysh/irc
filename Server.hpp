@@ -104,5 +104,7 @@ public:
     void sendNumericReply(int clientFd, int numericCode, const std::string& message);
     std::string formatMessage(const std::string &senderNickname, const std::string &message);
     bool processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss);
+    void sendToLastJoinedChannel(int clientFd, const std::string& message);
+    void leaveChannel(int clientFd, const std::string &channelName);
 
 };

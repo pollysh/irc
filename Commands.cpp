@@ -1,5 +1,43 @@
 #include "Server.hpp"
 
+void Server::leaveChannel(int clientFd, const std::string &channelName) {
+    // Existing leave/kick logic here...
+
+    // If they're leaving their last joined channel, find the next most recent channel
+    if (clientLastChannel[clientFd] == channelName) {
+        // Reset last channel initially
+        clientLastChannel[clientFd] = "";
+
+        // Find the most recent channel they're still part of, if any
+        for (std::map<std::string, std::vector<int> >::iterator it = channels.begin(); it != channels.end(); ++it) {
+            const std::vector<int>& members = it->second;
+            if (std::find(members.begin(), members.end(), clientFd) != members.end()) {
+                // This client is still a member of this channel, so update their last channel
+                clientLastChannel[clientFd] = it->first;
+                // Assuming channels are iterated in the order they were joined, which may not be the case.
+                // You might need a separate structure to track join order if necessary.
+            }
+        }
+    }
+}
+
+
+void Server::sendToLastJoinedChannel(int clientFd, const std::string& message) {
+    if (clientLastChannel.find(clientFd) != clientLastChannel.end() && !clientLastChannel[clientFd].empty()) {
+        std::string lastChannel = clientLastChannel[clientFd];
+        if (channels.find(lastChannel) != channels.end()) {
+            // Client is still a member of their last joined channel
+            sendMessageToChannel(clientFd, lastChannel, message);
+        } else {
+            // Client's last joined channel is no longer valid
+            sendMessage(clientFd, "ERROR: Your last joined channel is no longer available.\r\n");
+        }
+    } else {
+        // Client has not joined any channel or the last channel info is missing
+        sendMessage(clientFd, "ERROR: You haven't joined any channel.\r\n");
+    }
+}
+
 void Server::showMessage(const std::string& channelName, const std::string& message) {
     if (channels.find(channelName) != channels.end()) {
         std::vector<int>& clients = channels[channelName];
@@ -265,6 +303,7 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         std::string modeChangeMsg = ":" + nick + "!user@host MODE " + channelName + " +o " + nick + "\r\n"; // IRC message ends with CR LF
         broadcastMessage(channelName, modeChangeMsg, -1); // Corrected part, assuming broadcastMessage function handles -1 as "send to all"
     }
+    clientLastChannel[clientFd] = channelName;
 }
 
 void Server::inviteCmd(int clientFd, const std::string& channel, const std::string& targetNickname) {

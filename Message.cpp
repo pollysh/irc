@@ -32,34 +32,37 @@ void Server::sendMessage(int clientFd, const std::string &message)
 
 void Server::sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message) {
     if (channels.find(channel) == channels.end()) {
-        sendMessage(clientFd, "ERROR :No such channel.");
+        sendMessage(clientFd, "ERROR :No such channel.\r\n");
         return;
     }
 
-    std::map<std::string, std::vector<int> >::iterator channelIt = channels.find(channel);
+    if (clientNicknames.find(clientFd) == clientNicknames.end()) {
+        // This checks if the client has a nickname set, implying they've registered properly.
+        sendMessage(clientFd, "ERROR :You're not registered.\r\n");
+        return;
+    }
+
+    std::string senderNickname = clientNicknames[clientFd];
+    std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message + "\r\n";
+
+    // Check if the client is part of the channel
     bool isMember = false;
-    for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
+    std::vector<int>& members = channels[channel];
+    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
         if (*it == clientFd) {
             isMember = true;
-            break;
+            break; // Client is in the channel
         }
     }
 
     if (!isMember) {
-        sendMessage(clientFd, "ERROR :You're not a member of channel " + channel);
-        return;
+        sendMessage(clientFd, "ERROR :You're not a member of channel " + channel + ".\r\n");
+        return; // Stop execution if the client is not a member of the channel
     }
 
-    std::string senderNickname = "Unknown";
-    std::map<int, std::string>::iterator nickIt = clientNicknames.find(clientFd);
-    if (nickIt != clientNicknames.end()) {
-        senderNickname = nickIt->second;
-    }
-
-    std::string formattedMessage = ":" + senderNickname + "!user@host " + channel + " :" + message;
-
-    for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
-        if (*it != clientFd) {
+    // Send message to all members of the channel except the sender
+    for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
+        if (*it != clientFd) { // Don't send the message to the sender
             sendMessage(*it, formattedMessage);
         }
     }
@@ -77,14 +80,12 @@ bool Server::processInitialCommand(int clientFd, const std::string &command, std
         {
             clientAuthenticated[clientFd] = true;
             auth++;
-            sendMessage(clientFd, ":yeeey");
         }
         else
             sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
     }
     else if (command == "NICK")
     {
-        sendMessage(clientFd, ":GRUMPY POLINA");
         if (nickCmd(clientFd, argm))
             auth++;
     }
@@ -133,16 +134,6 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     }
     else
     {
-        std::map<int, std::string>::iterator it = clientLastChannel.find(clientFd);
-        if (it != clientLastChannel.end() && !it->second.empty())
-        {
-            // If there's a last joined channel, forward the message there
-            sendMessageToChannel(clientFd, it->second, trimmedMessage);
-        }
-        else
-        {
-             // Inform the client that they need to join a channel first
-             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
-         }
+        sendToLastJoinedChannel(clientFd, trimmedMessage);
     }
 }
