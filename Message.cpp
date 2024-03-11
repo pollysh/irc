@@ -12,8 +12,9 @@ void Server::broadcastMessage(const std::string& channelName, const std::string&
 
 void Server::sendMessage(int clientFd, const std::string& message) {
     std::string formattedMessage = message;
-    if (!message.empty() && message[message.length() - 1] != '\n') {
-        formattedMessage += "\n";
+    // Ensure the message ends with \r\n (IRC protocol line endings)
+    if (!message.empty() && (message.length() < 2 || message.substr(message.length() - 2) != "\r\n")) {
+        formattedMessage += "\r\n";
     }
     if (send(clientFd, formattedMessage.c_str(), formattedMessage.length(), 0) == -1) {
         std::cerr << "Failed to send message to client " << clientFd << ": " << strerror(errno) << std::endl;

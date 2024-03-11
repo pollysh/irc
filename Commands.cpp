@@ -235,10 +235,10 @@ void Server::joinChannel(int clientFd, const std::string& channelName, const std
     }
 
     // User limit check
-    if (channels[channelName].size() >= channelUserLimits[channelName]) {
-        sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.\r\n");
-        return;
-    }
+    //if (channels[channelName].size() >= channelUserLimits[channelName]) {
+      //  sendMessage(clientFd, "ERROR :User limit for " + channelName + " has been reached.\r\n");
+        //return;
+    //}
 
     // Add client to channel
     bool isNewMember = std::find(channels[channelName].begin(), channels[channelName].end(), clientFd) == channels[channelName].end();
