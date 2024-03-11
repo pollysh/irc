@@ -20,24 +20,20 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
 }
 
 void Server::nickCmd(int clientFd, const std::string& command) {
-    // Assuming command is "NICK <nickname>\r\n"
     std::string nickname;
     std::size_t pos = command.find(" ");
     if (pos != std::string::npos) {
         nickname = command.substr(pos + 1);
-        // Removing any trailing newlines or carriage returns
         nickname.erase(std::remove(nickname.begin(), nickname.end(), '\n'), nickname.end());
         nickname.erase(std::remove(nickname.begin(), nickname.end(), '\r'), nickname.end());
     }
 
     if (!nickname.empty()) {
-        // Check for whitespace or more than one word in nickname.
         if (nickname.find(' ') != std::string::npos) {
             sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
             return;
         }
 
-        // Check if the nickname already exists.
         bool nicknameExists = false;
         for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
             if (it->second == nickname) {
@@ -51,7 +47,7 @@ void Server::nickCmd(int clientFd, const std::string& command) {
         } else {
             clientNicknames[clientFd] = nickname;
             std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-            sendMessage(clientFd, "NICK :" + nickname); // Echo the nickname change back to the client.
+            sendMessage(clientFd, "NICK :" + nickname);
         }
     } else {
         sendMessage(clientFd, "Error: Nickname cannot be empty.");
@@ -259,13 +255,15 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         namesList += clientNicknames[channels[channelName][i]] + " ";
     }
     namesList.erase(namesList.end() - 1); // Remove the last space
-    sendNumericReply(clientFd, RPL_NAMREPLY, "= " + channelName + " :" + namesList);
+    std::string nameReply = "= " + channelName + " :" + namesList;
+    sendNumericReply(clientFd, RPL_NAMREPLY, nameReply);
     sendNumericReply(clientFd, RPL_ENDOFNAMES, channelName + " :End of /NAMES list.");
 
 
     // If it's a new channel, send mode +o for the joining user
     if (isNewChannel) {
-        broadcastMessage(channelName, ":Server MODE " + channelName + " +o " + nick, -1);
+        std::string modeChangeMsg = ":" + nick + "!user@host MODE " + channelName + " +o " + nick + "\r\n"; // IRC message ends with CR LF
+        broadcastMessage(channelName, modeChangeMsg, -1); // Corrected part, assuming broadcastMessage function handles -1 as "send to all"
     }
 }
 

@@ -22,13 +22,11 @@ void Server::sendMessage(int clientFd, const std::string& message) {
 }
 
 void Server::sendMessageToChannel(int clientFd, const std::string& channel, const std::string& message) {
-    // Ensure the channel exists
     if (channels.find(channel) == channels.end()) {
         sendMessage(clientFd, "ERROR :No such channel.");
         return;
     }
 
-    // Check if the client is part of the channel
     std::map<std::string, std::vector<int> >::iterator channelIt = channels.find(channel);
     bool isMember = false;
     for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
@@ -43,17 +41,14 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
         return;
     }
 
-    // Retrieve the sender's nickname or use a placeholder if not found
     std::string senderNickname = "Unknown";
     std::map<int, std::string>::iterator nickIt = clientNicknames.find(clientFd);
     if (nickIt != clientNicknames.end()) {
         senderNickname = nickIt->second;
     }
 
-    // Format the message as per IRC standards
     std::string formattedMessage = ":" + senderNickname + "!user@host " + channel + " :" + message;
 
-    // Broadcast the message to all channel members except the sender
     for (std::vector<int>::iterator it = channelIt->second.begin(); it != channelIt->second.end(); ++it) {
         if (*it != clientFd) {
             sendMessage(*it, formattedMessage);
