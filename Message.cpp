@@ -68,13 +68,18 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
 bool Server::processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss)
 {
     static int auth = 0;
-   
     std::string argm;
-        iss >> argm;
+    iss >> argm;
+    
     if (command == "PASS")
     {
+        
         if (argm == serverPassword)
-            auth++;
+        {
+            clientAuthenticated[clientFd] = true;
+            ++auth;
+            sendMessage(clientFd, "Password accepted. You are now authenticated.");
+        }
         else
             sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
     }
@@ -107,10 +112,9 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     std::istringstream iss(trimmedMessage);
     std::string command;
 
-    std::cout << "Raw Message: " << rawMessage << std::endl;
-
     if (!clientAuthenticated[clientFd])
     {
+         sendMessage(clientFd, "hello");
         while (iss >> command)
         {
             if (command == "PASS" || command == "NICK" || command == "USER")
@@ -135,10 +139,10 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
             // If there's a last joined channel, forward the message there
             sendMessageToChannel(clientFd, it->second, trimmedMessage);
         }
-        // else
-        // {
-        //     // Inform the client that they need to join a channel first
-        //     sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
-        // }
+        else
+        {
+             // Inform the client that they need to join a channel first
+             sendMessage(clientFd, ":Server 411 :You haven't joined any channel or missing command.");
+         }
     }
 }
