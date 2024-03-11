@@ -68,18 +68,13 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
 bool Server::processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss)
 {
     static int auth = 0;
+   
     std::string argm;
-    iss >> argm;
-    
+        iss >> argm;
     if (command == "PASS")
     {
-        
         if (argm == serverPassword)
-        {
-            clientAuthenticated[clientFd] = true;
-            ++auth;
-            sendMessage(clientFd, "Password accepted. You are now authenticated.");
-        }
+            auth++;
         else
             sendMessage(clientFd, ":Server 464 :Incorrect password. Please try again.");
     }
@@ -114,7 +109,6 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
 
     if (!clientAuthenticated[clientFd])
     {
-         sendMessage(clientFd, "hello");
         while (iss >> command)
         {
             if (command == "PASS" || command == "NICK" || command == "USER")
