@@ -75,23 +75,27 @@ void Server::processCommand(int clientFd, const std::string& command) {
             sendMessage(clientFd, "Error: TOPIC command requires a channel name.");
         }
     } else if (cmd == "MODE") {
-    std::string channel, modeArg;
-    iss >> channel >> modeArg;
-    bool set = (modeArg[0] == '+');
-    std::string mode = modeArg.substr(1, 1);
+        std::string channel, modeArg;
+        iss >> channel >> modeArg;
+        if (!modeArg.empty()) {
+            bool set = (modeArg[0] == '+');
+            if (modeArg.size() > 1) {
+                std::string mode = modeArg.substr(1, 1);
+            // Now process the mode
+            if (mode == "i" || mode == "t") {
 
-    if (mode == "i" || mode == "t") {
-
-        modeCmd(clientFd, channel, mode, set);
-    }
-    else if (mode == "o" || mode == "k" || mode == "l") {
-        std::string argument;
-        iss >> argument; 
-        if (argument.empty()) {
-            sendMessage(clientFd, "Error: Missing argument for setting mode " + mode);
-            return;
+                modeCmd(clientFd, channel, mode, set);
+            }
+            else if (mode == "o" || mode == "k" || mode == "l") {
+                std::string argument;
+                iss >> argument; 
+                if (argument.empty()) {
+                    sendMessage(clientFd, "Error: Missing argument for setting mode " + mode);
+                    return;
+                }
+            modeCmd(clientFd, channel, mode, set, argument, argument);
+            }
         }
-        modeCmd(clientFd, channel, mode, set, argument, argument);
-    }
+        }
     }
 }

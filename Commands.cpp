@@ -25,9 +25,9 @@ bool Server::nickCmd(int clientFd, const std::string& command) {
     std::cout <<"Nickname: " << command << std::endl;
 
     if (!nickname.empty()) {
-        if (nickname.find(' ') != std::string::npos) {
-            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
-        }
+       // if (nickname.find(' ') != std::string::npos) {
+       //     sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
+       // }
 
         bool nicknameExists = false;
         for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
@@ -128,9 +128,12 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
     } else if (mode == "l") {
         if (set) {
             try {
-                int limit = std::stoi(password);
+                int limit = std::atoi(password.c_str());
                 channelUserLimits[channel] = limit;
-                sendMessage(clientFd, "User limit for " + channel + " has been set to " + std::to_string(limit) + ".");
+                std::ostringstream convert;
+                convert << limit;
+                std::string limitAsString = convert.str();
+                sendMessage(clientFd, "User limit for " + channel + " has been set to " + limitAsString + ".");
             } catch (const std::invalid_argument& ia) {
                 sendMessage(clientFd, "Error: Invalid user limit provided.");
             } catch (const std::out_of_range& oor) {
@@ -341,11 +344,14 @@ std::string toLower(const std::string& str) {
 
 std::string Server::trim(const std::string& str) {
     std::string::size_type first = str.find_first_not_of(' ');
-    if (first == std::string::npos) return "";
     std::string::size_type last = str.find_last_not_of(' ');
+
+    // If either 'first' or 'last' is npos (not found), the string is either empty or all spaces.
+    if (first == std::string::npos || last == std::string::npos) return "";
+
+    // Safe to call substr as 'first' and 'last' are guaranteed to be within the string's bounds.
     return str.substr(first, last - first + 1);
 }
-
 
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
     std::string lowerRecipientNickname = toLower(trim(recipientNickname));

@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <algorithm>
 #include <iomanip>
+#include <sstream>
 
 #define MAX_CLIENTS 1024
 #define MAX_PORT 65535
