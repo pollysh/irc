@@ -106,11 +106,24 @@ void Server::processConnections() {
             ssize_t nbytes = recv(fds[i].fd, buffer, BUFFER_SIZE - 1, 0);
 
             if (nbytes > 0) {
-                processClientMessage(fds[i].fd, std::string(buffer));
+                // Append new data to the partial input buffer for this client
+                partialInputs[fds[i].fd] += std::string(buffer, nbytes);
+
+                // Check if the command is complete (e.g., ending with newline)
+                size_t pos;
+                while ((pos = partialInputs[fds[i].fd].find('\n')) != std::string::npos) {
+                    // Extract the complete command
+                    std::string command = partialInputs[fds[i].fd].substr(0, pos);
+                    processClientMessage(fds[i].fd, command);
+
+                    // Remove the processed command from the buffer
+                    partialInputs[fds[i].fd].erase(0, pos + 1);
+                }
             } else if (nbytes == 0) {
                 std::cout << "Client disconnected." << std::endl;
                 close(fds[i].fd);
                 clientAuthenticated.erase(fds[i].fd);
+                partialInputs.erase(fds[i].fd); // Clear partial input for this client
                 fds[i] = fds[--nfds];
             } else {
                 if (errno == EWOULDBLOCK || errno == EAGAIN) {
@@ -118,9 +131,11 @@ void Server::processConnections() {
                 } else {
                     std::cerr << "Error on recv: " << strerror(errno) << " (errno " << errno << ")" << std::endl;
                     close(fds[i].fd);
+                    partialInputs.erase(fds[i].fd); // Clear partial input for this client
                     fds[i] = fds[--nfds];
                 }
             }
         }
     }
 }
+

@@ -69,6 +69,7 @@ private:
     std::map<std::string, int> channelUserLimits;
     std::map<int, bool> clientAuthenticated;
     std::map<int, int> authFlags;
+    std::map<int, std::string> partialInputs;
 
 public:
     Server();
@@ -105,7 +106,6 @@ public:
     std::string formatMessage(const std::string &senderNickname, const std::string &message);
     bool processInitialCommand(int clientFd, const std::string &command, std::istringstream &iss);
     void sendToLastJoinedChannel(int clientFd, const std::string& message);
-    void leaveChannel(int clientFd, const std::string &channelName);
     void redirectMessageToOtherChannel(int clientFd, const std::string& message);
     std::string formatMessageForChannel(int clientFd, const std::string& channel, const std::string& message);
 };

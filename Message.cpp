@@ -47,13 +47,11 @@ void Server::redirectMessageToOtherChannel(int clientFd, const std::string& mess
 }
 
 std::string Server::formatMessageForChannel(int clientFd, const std::string& channel, const std::string& message) {
-    // Retrieve the sender's nickname from the client ID
-    std::string senderNickname = "Unknown"; // Default nickname if not found
+    std::string senderNickname = "Unknown";
     if(clientNicknames.find(clientFd) != clientNicknames.end()) {
         senderNickname = clientNicknames[clientFd]; // Found the nickname
     }
 
-    // Format the message as per IRC standards: ":<sender>!user@host PRIVMSG <channel> :<message>"
     std::string formattedMessage = ":" + senderNickname + "!user@host PRIVMSG " + channel + " :" + message;
 
     return formattedMessage;
@@ -68,12 +66,10 @@ void Server::sendMessageToChannel(int clientFd, const std::string& channel, cons
 
     std::vector<int>& members = channels[channel];
     if (std::find(members.begin(), members.end(), clientFd) == members.end()) {
-        // Client is not a member of the specified channel, attempt to redirect the message
         redirectMessageToOtherChannel(clientFd, message);
         return;
     }
 
-    // Proceed to send the message to the channel as usual
     std::string formattedMessage = formatMessageForChannel(clientFd, channel, message);
     for (std::vector<int>::iterator it = members.begin(); it != members.end(); ++it) {
         if (*it != clientFd) {
@@ -124,11 +120,12 @@ bool Server::processInitialCommand(int clientFd, const std::string &command, std
 
 void Server::processClientMessage(int clientFd, const std::string &rawMessage)
 {
-    // Trim the message and split by spaces to identify the command and its parameters
     std::string trimmedMessage = trim(rawMessage);
     std::istringstream iss(trimmedMessage);
     std::string command;
 
+    std::cout << "Processing trimmed message: [" << trimmedMessage << "]" << std::endl;
+    
     if (!clientAuthenticated[clientFd])
     {
         while (iss >> command)

@@ -1,39 +1,14 @@
 #include "Server.hpp"
 
-void Server::leaveChannel(int clientFd, const std::string &channelName) {
-    // Existing leave/kick logic here...
-
-    // If they're leaving their last joined channel, find the next most recent channel
-    if (clientLastChannel[clientFd] == channelName) {
-        // Reset last channel initially
-        clientLastChannel[clientFd] = "";
-
-        // Find the most recent channel they're still part of, if any
-        for (std::map<std::string, std::vector<int> >::iterator it = channels.begin(); it != channels.end(); ++it) {
-            const std::vector<int>& members = it->second;
-            if (std::find(members.begin(), members.end(), clientFd) != members.end()) {
-                // This client is still a member of this channel, so update their last channel
-                clientLastChannel[clientFd] = it->first;
-                // Assuming channels are iterated in the order they were joined, which may not be the case.
-                // You might need a separate structure to track join order if necessary.
-            }
-        }
-    }
-}
-
-
 void Server::sendToLastJoinedChannel(int clientFd, const std::string& message) {
     if (clientLastChannel.find(clientFd) != clientLastChannel.end() && !clientLastChannel[clientFd].empty()) {
         std::string lastChannel = clientLastChannel[clientFd];
         if (channels.find(lastChannel) != channels.end()) {
-            // Client is still a member of their last joined channel
             sendMessageToChannel(clientFd, lastChannel, message);
         } else {
-            // Client's last joined channel is no longer valid
             sendMessage(clientFd, "ERROR: Your last joined channel is no longer available.\r\n");
         }
     } else {
-        // Client has not joined any channel or the last channel info is missing
         sendMessage(clientFd, "ERROR: You haven't joined any channel.\r\n");
     }
 }
@@ -152,16 +127,18 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
         sendMessage(clientFd, "Operator restrictions for " + channel + " are now " + status + ".");
         showMessage(channel, "The channel " + channel + " now has operator restrictions " + status + ".");
     } else if (mode == "k") {
-        if (set && !password.empty()) {
-            channelPasswords[channel] = password;
-            sendMessage(clientFd, "Password for " + channel + " has been set.");
-            showMessage(channel, "A password is now required to join " + channel + ".");
-        } else if (!set) {
+        if (set) {
+            // Trim the password before saving it
+            std::string trimmedPassword = trim(password);
+            if (!trimmedPassword.empty()) {
+                channelPasswords[channel] = trimmedPassword;
+                sendMessage(clientFd, "Password for " + channel + " has been set.");
+            } else {
+                sendMessage(clientFd, "Error: A password is required to set mode +k.");
+            }
+        } else {
             channelPasswords.erase(channel);
             sendMessage(clientFd, "Password for " + channel + " has been removed.");
-            showMessage(channel, channel + " no longer requires a password to join.");
-        } else {
-            sendMessage(clientFd, "Error: A password is required to set the channel key.");
         }
     } else if (mode == "l") {
         if (set) {
@@ -246,37 +223,62 @@ void Server::topicCmd(int clientFd, const std::string& channel, const std::strin
             }
         } else {
             channelTopics[channel] = newTopic;
-            // Broadcast the topic change to all channel members
             std::string topicChangeMsg = ":" + clientNicknames[clientFd] + "!user@host TOPIC " + channel + " :" + newTopic;
-            broadcastMessage(channel, topicChangeMsg, -1); // Assuming broadcastMessage skips sending to excludeFd if it's -1
+            broadcastMessage(channel, topicChangeMsg, -1); 
         }
     } else {
         sendNumericReply(clientFd, ERR_CHANOPRIVSNEEDED, channel + " :You're not channel operator");
     }
 }
 
+std::string visualizeWhitespace(const std::string& input) {
+    std::ostringstream oss;
+    for (std::string::const_iterator it = input.begin(); it != input.end(); ++it) {
+        switch (*it) {
+            case '\n': oss << "\\n"; break;
+            case '\t': oss << "\\t"; break;
+            case '\r': oss << "\\r"; break;
+            case ' ': oss << "_"; break; // Visualize space with underscore for clarity
+            default: oss << *it; // Regular character
+        }
+    }
+    return oss.str();
+}
+
+std::string trimPassword(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t\r\n"); // Include \n for newline characters as well
+    if (first == std::string::npos) return "";
+    size_t last = str.find_last_not_of(" \t\r\n");
+    return str.substr(first, (last - first + 1));
+}
+
 void Server::joinChannel(int clientFd, const std::string &channelName, const std::string &password) {
+    std::string visualizedPassword = visualizeWhitespace(password);
+    std::cout << "Visualized password input: '" << visualizedPassword << "'" << std::endl;
+    std::string trimmedPassword = trimPassword(password);
+
     if (channelName.empty() || channelName[0] != '#') {
         sendNumericReply(clientFd, 403, "No such channel");
         return;
     }
 
-    // Check for invite-only and password requirements
     if (channelInviteOnly[channelName] && channelInvitations[channelName].find(clientFd) == channelInvitations[channelName].end()) {
         sendNumericReply(clientFd, 473, channelName + " :Cannot join channel (+i) - invite only");
         return;
     }
 
-    std::cout << "Attempting to join channel " << channelName 
-          << " with password: '" << password 
-          << "' (expected: '" << channelPasswords[channelName] << "')" << std::endl;
+    std::cout << "Attempting to join channel: " << channelName 
+          << " | Exists: " << (channels.find(channelName) != channels.end() ? "Yes" : "No")
+          << " | Requires password: " << (!channelPasswords[channelName].empty() ? "Yes" : "No")
+          << " | Provided password: '" << trimmedPassword << "'"
+          << " | Expected password: '" << channelPasswords[channelName] << "'"
+          << " | Invite-only: " << (channelInviteOnly.find(channelName) != channelInviteOnly.end() && channelInviteOnly[channelName] ? "Yes" : "No") << std::endl;
 
-    if (!channelPasswords[channelName].empty() && password != channelPasswords[channelName]) {
+    if (!channelPasswords[channelName].empty() && trimmedPassword != channelPasswords[channelName]) {
         sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+k) - wrong channel key");
         return;
     }
 
-    // Check for user limit
     if (channelUserLimits[channelName] > 0 && channels[channelName].size() >= static_cast<size_t>(channelUserLimits[channelName])) {
         sendNumericReply(clientFd, 471, channelName + " :Cannot join channel (+l) - channel is full");
         return;
@@ -292,8 +294,8 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         return; 
     }
 
-    if (channelInviteOnly[channelName] && password != channelPasswords[channelName]) {
-        sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+i) - wrong password or invite required");
+    if (channelInviteOnly[channelName]) {
+        sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+i) - invite required");
         return;
     }
 
@@ -313,21 +315,19 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
     sendMessage(clientFd, joinMsg);
     broadcastMessage(channelName, joinMsg, clientFd);
 
-    // Send names list to the joining client
     std::string namesList = "353 " + nick + " = " + channelName + " :";
     for (size_t i = 0; i < channels[channelName].size(); ++i) {
         namesList += clientNicknames[channels[channelName][i]] + " ";
     }
-    namesList.erase(namesList.end() - 1); // Remove the last space
+    namesList.erase(namesList.end() - 1);
     std::string nameReply = "= " + channelName + " :" + namesList;
     sendNumericReply(clientFd, RPL_NAMREPLY, nameReply);
     sendNumericReply(clientFd, RPL_ENDOFNAMES, channelName + " :End of /NAMES list.");
 
 
-    // If it's a new channel, send mode +o for the joining user
     if (isNewChannel) {
-        std::string modeChangeMsg = ":" + nick + "!user@host MODE " + channelName + " +o " + nick + "\r\n"; // IRC message ends with CR LF
-        broadcastMessage(channelName, modeChangeMsg, -1); // Corrected part, assuming broadcastMessage function handles -1 as "send to all"
+        std::string modeChangeMsg = ":" + nick + "!user@host MODE " + channelName + " +o " + nick + "\r\n";
+        broadcastMessage(channelName, modeChangeMsg, -1); 
     }
     clientLastChannel[clientFd] = channelName;
 }
@@ -355,7 +355,6 @@ void Server::inviteCmd(int clientFd, const std::string& channel, const std::stri
             return;
         }
 
-        // Before checking if the user is already in the channel, record the invitation
         channelInvitations[channel].insert(targetFd);
 
         std::vector<int>& clients = channels[channel];
@@ -411,41 +410,33 @@ std::string Server::trim(const std::string& str) {
     std::string::size_type first = str.find_first_not_of(' ');
     std::string::size_type last = str.find_last_not_of(' ');
 
-    // If either 'first' or 'last' is npos (not found), the string is either empty or all spaces.
     if (first == std::string::npos || last == std::string::npos) return "";
 
-    // Safe to call substr as 'first' and 'last' are guaranteed to be within the string's bounds.
     return str.substr(first, last - first + 1);
 }
 
 void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickname, const std::string& message) {
     std::string senderNickname = clientNicknames[senderFd];
 
-    // Check if recipient is a channel
     if (!recipientNickname.empty() && recipientNickname[0] == '#') {
-        // This is a channel
-        std::string channelName = recipientNickname; // Assuming recipientNickname contains the channel name
+        std::string channelName = recipientNickname;
         if (channels.find(channelName) != channels.end()) {
-            // Format the message for channel
             std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + channelName + " :" + message;
 
-            // Iterate over all channel members and send them the message
+         
             std::vector<int>& members = channels[channelName];
             for (size_t i = 0; i < members.size(); ++i) {
-                if (members[i] != senderFd) { // Don't send the message back to the sender
+                if (members[i] != senderFd) { 
                     sendMessage(members[i], formattedMessage);
                 }
             }
         } else {
-            // Channel not found
             sendMessage(senderFd, "Error: Channel '" + channelName + "' not found.");
         }
     } else {
-        // This is a private message to a user
         std::string lowerRecipientNickname = toLower(trim(recipientNickname));
         int recipientFd = -1;
 
-        // Find the recipient's file descriptor based on nickname
         for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
             if (toLower(trim(it->second)) == lowerRecipientNickname) {
                 recipientFd = it->first;
@@ -454,13 +445,10 @@ void Server::sendPrivateMessage(int senderFd, const std::string& recipientNickna
         }
 
         if (recipientFd != -1) {
-            // Format the message according to IRC standards for PRIVMSG to a user
             std::string formattedMessage = ":" + senderNickname + "!" + senderNickname + "@server PRIVMSG " + recipientNickname + " :" + message;
             
-            // Send the formatted message to the recipient
             sendMessage(recipientFd, formattedMessage);
         } else {
-            // User not found
             sendMessage(senderFd, "Error: User '" + recipientNickname + "' not found.");
         }
     }

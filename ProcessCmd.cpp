@@ -15,7 +15,7 @@ void Server::processCommand(int clientFd, const std::string& command) {
         std::string channel;
         std::string password = "";
         iss >> channel;
-
+        
         if (!iss.eof()) {
             std::getline(iss, password);
             iss >> password;
