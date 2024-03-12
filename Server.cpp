@@ -106,19 +106,39 @@ void Server::processConnections() {
             ssize_t nbytes = recv(fds[i].fd, buffer, BUFFER_SIZE - 1, 0);
 
             if (nbytes > 0) {
-                processClientMessage(fds[i].fd, std::string(buffer));
+                // Process the incoming message
+                processClientMessage(fds[i].fd, std::string(buffer, nbytes));
             } else if (nbytes == 0) {
+                // Client has disconnected
                 std::cout << "Client disconnected." << std::endl;
-                close(fds[i].fd);
-                clientAuthenticated.erase(fds[i].fd);
-                fds[i] = fds[--nfds];
+
+                // Perform cleanup
+                close(fds[i].fd); // Close the socket
+                clientAuthenticated.erase(fds[i].fd); // Remove from authenticated clients tracking
+                // Remove client's nickname if applicable
+                // Example: activeNicknames.erase(clientNicknames[fds[i].fd]);
+                clientNicknames.erase(fds[i].fd);
+                
+
+                for (int j = i; j < nfds - 1; j++) {
+                    fds[j] = fds[j + 1];
+                }
+                nfds--; 
+                i--; 
+
             } else {
-                if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                    continue;
-                } else {
-                    std::cerr << "Error on recv: " << strerror(errno) << " (errno " << errno << ")" << std::endl;
+
+                if (errno != EWOULDBLOCK && errno != EAGAIN) {
+                    std::cerr << "recv error: " << strerror(errno) << std::endl;
                     close(fds[i].fd);
-                    fds[i] = fds[--nfds];
+                    clientAuthenticated.erase(fds[i].fd);
+                    clientNicknames.erase(fds[i].fd);
+                    
+                    for (int j = i; j < nfds - 1; j++) {
+                        fds[j] = fds[j + 1];
+                    }
+                    nfds--;
+                    i--;
                 }
             }
         }

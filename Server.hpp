@@ -108,4 +108,5 @@ public:
     void sendToLastJoinedChannel(int clientFd, const std::string& message);
     void redirectMessageToOtherChannel(int clientFd, const std::string& message);
     std::string formatMessageForChannel(int clientFd, const std::string& channel, const std::string& message);
+    void handleClientDisconnection(int clientFd);
 };
