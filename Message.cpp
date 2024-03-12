@@ -134,7 +134,7 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
             if (command == "PASS" || command == "NICK" || command == "USER")
                 processInitialCommand(clientFd, command, iss);
         }
-        
+
         if (clientAuthenticated[clientFd])
             return;
     }
@@ -148,6 +148,7 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     }
     else
     {
-        sendToLastJoinedChannel(clientFd, trimmedMessage);
+        if (clientAuthenticated[clientFd])
+            sendToLastJoinedChannel(clientFd, trimmedMessage);
     }
 }
