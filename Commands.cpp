@@ -32,41 +32,35 @@ int Server::getClientFdFromNickname(const std::string& targetNickname) {
     return -1;
 }
 
-bool Server::nickCmd(int clientFd, const std::string& nickname) {
-    // Trim the nickname to remove leading and trailing spaces
-    std::string trimmedNickname;
-    size_t first = nickname.find_first_not_of(' ');
-    if (first != std::string::npos) {
-        size_t last = nickname.find_last_not_of(' ');
-        trimmedNickname = nickname.substr(first, (last - first + 1));
-    } else {
-        trimmedNickname = nickname;
-    }
+bool Server::nickCmd(int clientFd, const std::string& command) {
+   
+    std::string nickname = command;
+    std::cout <<"Nickname: " << command << std::endl;
 
-    if (!trimmedNickname.empty()) {
+    if (!nickname.empty()) {
+       // if (nickname.find(' ') != std::string::npos) {
+       //     sendMessage(clientFd, "Error: Nickname '" + nickname + "' is invalid. It cannot contain spaces.");
+       // }
+
+        bool nicknameExists = false;
         for (std::map<int, std::string>::iterator it = clientNicknames.begin(); it != clientNicknames.end(); ++it) {
-            if (it->second == trimmedNickname) {
-                sendMessage(clientFd, "433 * " + trimmedNickname + " :Nickname is already in use\r\n");
-                return false;
+            if (it->second == nickname) {
+                nicknameExists = true;
+                break;
             }
         }
 
-        // Assuming oldNickname is retrieved and stored correctly
-        std::string oldNickname = clientNicknames[clientFd];
-        clientNicknames[clientFd] = trimmedNickname;
-
-        // Sending the correct format of response to the client
-        sendMessage(clientFd, ":" + oldNickname + "!user@host NICK :" + trimmedNickname + "\r\n");
-        
-        // Notify other clients in shared channels (This part is left as an exercise)
-        // You would typically loop through all channels the client is part of
-        // and notify other clients in those channels of the nickname change.
-        
-        return true;
-    } else {
-        sendMessage(clientFd, "431 * :No nickname given\r\n");
-        return false;
-    }
+        if (nicknameExists) {
+            sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
+        } else {
+            clientNicknames[clientFd] = nickname;
+            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
+            sendMessage(clientFd, "NICK :" + nickname);
+            return true;
+        }
+    } else 
+        sendMessage(clientFd, "Error: Nickname cannot be empty.");
+    return false;
 }
 
 void Server::userCmd(int clientFd, const std::string& command) {
