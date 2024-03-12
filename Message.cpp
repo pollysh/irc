@@ -127,13 +127,14 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     
     if (!clientAuthenticated[clientFd])
     {
-        sendMessage(clientFd, "ERROR: You are not authenticated. Please use PASS command.");
     
         while (iss >> command)
         {
             if (command == "PASS" || command == "NICK" || command == "USER")
                 processInitialCommand(clientFd, command, iss);
         }
+
+        sendMessage(clientFd, "ERROR: You are not authenticated. Please use PASS command.");
 
         if (clientAuthenticated[clientFd])
             return;
