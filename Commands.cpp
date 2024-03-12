@@ -53,9 +53,10 @@ bool Server::nickCmd(int clientFd, const std::string& command) {
         if (nicknameExists) {
             sendMessage(clientFd, "Error: Nickname '" + nickname + "' is already in use.");
         } else {
+            std::string oldNickname = clientNicknames[clientFd];
             clientNicknames[clientFd] = nickname;
-            std::cout << "Client " << clientFd << " sets nickname to " << nickname << std::endl;
-            sendMessage(clientFd, "NICK :" + nickname);
+            std::string message = ":" + oldNickname + "!user@host NICK :" + nickname + "\r\n";
+            sendMessage(clientFd, message);
             return true;
         }
     } else 

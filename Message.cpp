@@ -124,20 +124,17 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     std::istringstream iss(trimmedMessage);
     std::string command;
 
+    std::cout << "Processing trimmed message: [" << trimmedMessage << "]" << std::endl;
     
     if (!clientAuthenticated[clientFd])
     {
-    
         while (iss >> command)
         {
             if (command == "PASS" || command == "NICK" || command == "USER")
                 processInitialCommand(clientFd, command, iss);
         }
-
         if (clientAuthenticated[clientFd])
             return;
-
-        sendMessage(clientFd, "ERROR: You are not authenticated. Please use PASS command.");     
     }
 
     iss >> command;
@@ -149,7 +146,6 @@ void Server::processClientMessage(int clientFd, const std::string &rawMessage)
     }
     else
     {
-        if (clientAuthenticated[clientFd])
-            sendToLastJoinedChannel(clientFd, trimmedMessage);
+        sendToLastJoinedChannel(clientFd, trimmedMessage);
     }
 }
