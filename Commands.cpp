@@ -143,19 +143,15 @@ void Server::modeCmd(int clientFd, const std::string& channel, const std::string
         }
     } else if (mode == "l") {
         if (set) {
-            try {
                 int limit = std::atoi(password.c_str());
+                if (limit <= 0) {
+                    sendMessage(clientFd, "Error: Invalid user limit provided.");
+                } else
+                {
                 channelUserLimits[channel] = limit;
-                std::ostringstream convert;
-                convert << limit;
-                std::string limitAsString = convert.str();
-                sendMessage(clientFd, "User limit for " + channel + " has been set to " + limitAsString + ".");
-            } catch (const std::invalid_argument& ia) {
-                sendMessage(clientFd, "Error: Invalid user limit provided.");
-            } catch (const std::out_of_range& oor) {
-                sendMessage(clientFd, "Error: User limit is out of range.");
-            }
-        } else {
+                sendMessage(clientFd, "User limit for " + channel + " has been set to " + password + ".");
+                }
+            } else {
             channelUserLimits.erase(channel);
             sendMessage(clientFd, "User limit for " + channel + " has been removed.");
         }
@@ -387,7 +383,7 @@ void Server::kickCmd(int clientFd, const std::string& channel, const std::string
             sendMessage(clientFd, "Error: User not in the specified channel.");
         }
     } else {
-        sendMessage(clientFd, "Error: Only the channel operator can kick users.");
+        sendMessage(clientFd, "Error: Only the channel operator can kick users or specify the channel");
     }
 }
 

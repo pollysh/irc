@@ -1,11 +1,30 @@
 #include "Server.hpp"
 
 void Server::broadcastMessage(const std::string& channelName, const std::string& message, int excludeFd) {
+    if (channels.find(channelName) == channels.end()) {
+        std::cerr << "Channel not found: " << channelName << std::endl;
+        return;
+    }
+
     std::vector<int>& clients = channels[channelName];
-    for (size_t i = 0; i < clients.size(); ++i) {
-        int memberFd = clients[i];
+    std::vector<int>::iterator it = clients.begin();
+    
+    while (it != clients.end()) {
+        int memberFd = *it;
         if (memberFd != excludeFd) {
-            sendMessage(memberFd, message);
+            std::string formattedMessage = message + "\r\n"; // Ensure message ends with \r\n
+            if (send(memberFd, formattedMessage.c_str(), formattedMessage.length(), 0) == -1) {
+                std::cerr << "Failed to send message to client " << memberFd << ": " << strerror(errno) << std::endl;
+                // Erase and close inside the condition to avoid skipping elements after erase
+                close(memberFd); // Ensure the socket is closed
+                clientAuthenticated.erase(memberFd);
+                clientNicknames.erase(memberFd);
+                it = clients.erase(it); // Adjust iterator post-erase
+            } else {
+                ++it; // Only increment if no erase was performed
+            }
+        } else {
+            ++it; // Increment if this client is excluded from broadcast
         }
     }
 }
@@ -42,7 +61,7 @@ void Server::redirectMessageToOtherChannel(int clientFd, const std::string& mess
     }
 
     if (!messageRedirected) {
-        sendMessage(clientFd, "ERROR: You're not a member of any channel.\r\n");
+        sendMessage(clientFd, "ERROR: You're not a member of any channel or hasn't identified with PASS.\r\n");
     }
 }
 

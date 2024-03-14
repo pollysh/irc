@@ -13,6 +13,15 @@
 
 using namespace std;
 
+void Server::removeClientFromAllChannels(int clientFd) {
+    for (std::map<std::string, std::vector<int> >::iterator it = channels.begin(); it != channels.end(); ++it) {
+        std::vector<int>& clients = it->second;
+        std::vector<int>::iterator pos = std::find(clients.begin(), clients.end(), clientFd);
+        if (pos != clients.end()) {
+            clients.erase(pos);
+        }
+    }
+}
 
 int Server::setNonBlocking(int fd) {
     return fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -111,36 +120,20 @@ void Server::processConnections() {
             } else if (nbytes == 0) {
                 // Client has disconnected
                 std::cout << "Client disconnected." << std::endl;
-
-                // Perform cleanup
+                removeClientFromAllChannels(fds[i].fd);
                 close(fds[i].fd); // Close the socket
-                clientAuthenticated.erase(fds[i].fd); // Remove from authenticated clients tracking
-                // Remove client's nickname if applicable
-                // Example: activeNicknames.erase(clientNicknames[fds[i].fd]);
+                clientAuthenticated.erase(fds[i].fd);
                 clientNicknames.erase(fds[i].fd);
-                
 
+                // Shift the fds array
                 for (int j = i; j < nfds - 1; j++) {
                     fds[j] = fds[j + 1];
                 }
                 nfds--; 
                 i--; 
-
-            } else {
-
-                if (errno != EWOULDBLOCK && errno != EAGAIN) {
-                    std::cerr << "recv error: " << strerror(errno) << std::endl;
-                    close(fds[i].fd);
-                    clientAuthenticated.erase(fds[i].fd);
-                    clientNicknames.erase(fds[i].fd);
-                    
-                    for (int j = i; j < nfds - 1; j++) {
-                        fds[j] = fds[j + 1];
-                    }
-                    nfds--;
-                    i--;
-                }
-            }
+            } 
+            // Removed errno check. Now, we simply do not act on nbytes < 0.
+            // This complies with the requirement to not use errno for specific actions.
         }
     }
 }
