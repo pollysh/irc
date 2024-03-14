@@ -254,8 +254,6 @@ std::string trimPassword(const std::string& str) {
 }
 
 void Server::joinChannel(int clientFd, const std::string &channelName, const std::string &password) {
-    std::string visualizedPassword = visualizeWhitespace(password);
-    std::cout << "Visualized password input: '" << visualizedPassword << "'" << std::endl;
     std::string trimmedPassword = trimPassword(password);
 
     if (channelName.empty() || channelName[0] != '#') {
@@ -267,13 +265,6 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         sendNumericReply(clientFd, 473, channelName + " :Cannot join channel (+i) - invite only");
         return;
     }
-
-    std::cout << "Attempting to join channel: " << channelName 
-          << " | Exists: " << (channels.find(channelName) != channels.end() ? "Yes" : "No")
-          << " | Requires password: " << (!channelPasswords[channelName].empty() ? "Yes" : "No")
-          << " | Provided password: '" << trimmedPassword << "'"
-          << " | Expected password: '" << channelPasswords[channelName] << "'"
-          << " | Invite-only: " << (channelInviteOnly.find(channelName) != channelInviteOnly.end() && channelInviteOnly[channelName] ? "Yes" : "No") << std::endl;
 
     if (!channelPasswords[channelName].empty() && trimmedPassword != channelPasswords[channelName]) {
         sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+k) - wrong channel key");
@@ -295,11 +286,12 @@ void Server::joinChannel(int clientFd, const std::string &channelName, const std
         return; 
     }
 
-    if (channelInviteOnly[channelName]) {
-        sendNumericReply(clientFd, 475, channelName + " :Cannot join channel (+i) - invite required");
+    if (channelInviteOnly[channelName] && channelInvitations[channelName].find(clientFd) == channelInvitations[channelName].end()) {
+        sendNumericReply(clientFd, 473, channelName + " :Cannot join channel (+i) - invite only");
         return;
+    } else {
+        channelInvitations[channelName].erase(clientFd);
     }
-
 
     if (isNewChannel) {
         channels[channelName] = std::vector<int>();
