@@ -129,7 +129,7 @@ void Server::processConnections() {
             } else if (nbytes == 0) {
                 handleClientDisconnection(i); // Handle disconnection
             } else {
-                 break;
+                 continue;
             }
         }
     }
