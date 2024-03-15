@@ -109,31 +109,48 @@ void Server::run() {
 }
 
 void Server::processConnections() {
+    char buffer[BUFFER_SIZE];
+
     for (int i = 1; i < nfds; i++) {
         if (fds[i].revents & POLLIN) {
-            char buffer[BUFFER_SIZE] = {0};
-            ssize_t nbytes = recv(fds[i].fd, buffer, BUFFER_SIZE - 1, 0);
+            ssize_t nbytes = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
+            buffer[nbytes] = '\0'; // Null-terminate the received data
 
             if (nbytes > 0) {
-                // Process the incoming message
-                processClientMessage(fds[i].fd, std::string(buffer, nbytes));
-            } else if (nbytes == 0) {
-                // Client has disconnected
-                std::cout << "Client disconnected." << std::endl;
-                removeClientFromAllChannels(fds[i].fd);
-                close(fds[i].fd); // Close the socket
-                clientAuthenticated.erase(fds[i].fd);
-                clientNicknames.erase(fds[i].fd);
+                clientBuffers[fds[i].fd] += std::string(buffer, nbytes); // Append data to buffer
 
-                // Shift the fds array
-                for (int j = i; j < nfds - 1; j++) {
-                    fds[j] = fds[j + 1];
+                // Check if buffer contains a complete command (ending with '\n')
+                size_t pos;
+                while ((pos = clientBuffers[fds[i].fd].find('\n')) != std::string::npos) {
+                    std::string command = clientBuffers[fds[i].fd].substr(0, pos);
+                    clientBuffers[fds[i].fd].erase(0, pos + 1); // Remove the processed command from buffer
+
+                    // Now that a full command has been received, process it
+                    processClientMessage(fds[i].fd, command);
                 }
-                nfds--; 
-                i--; 
-            } 
-            // Removed errno check. Now, we simply do not act on nbytes < 0.
-            // This complies with the requirement to not use errno for specific actions.
+            } else if (nbytes == 0) {
+                // Handle client disconnection
+                handleClientDisconnection(i);
+            } else {
+                // Error handling remains unchanged
+                // Removed specific errno handling based on requirements
+            }
         }
     }
+}
+
+void Server::handleClientDisconnection(int clientIndex) {
+    int clientFd = fds[clientIndex].fd;
+    std::cout << "Client disconnected." << std::endl;
+    removeClientFromAllChannels(clientFd);
+    close(clientFd); // Close the socket
+    clientAuthenticated.erase(clientFd);
+    clientNicknames.erase(clientFd);
+    clientBuffers.erase(clientFd); // Clean up the command buffer
+
+    // Shift the fds array
+    for (int j = clientIndex; j < nfds - 1; j++) {
+        fds[j] = fds[j + 1];
+    }
+    nfds--; 
 }
