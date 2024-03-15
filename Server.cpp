@@ -114,26 +114,22 @@ void Server::processConnections() {
     for (int i = 1; i < nfds; i++) {
         if (fds[i].revents & POLLIN) {
             ssize_t nbytes = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
-            buffer[nbytes] = '\0'; // Null-terminate the received data
 
             if (nbytes > 0) {
-                clientBuffers[fds[i].fd] += std::string(buffer, nbytes); // Append data to buffer
+                buffer[nbytes] = '\0'; // Null-terminate the received data
+                clientBuffers[fds[i].fd] += std::string(buffer); // Append to buffer
 
-                // Check if buffer contains a complete command (ending with '\n')
+                // Check for command delimiter (\n)
                 size_t pos;
-                while ((pos = clientBuffers[fds[i].fd].find('\n')) != std::string::npos) {
+                while ((pos = clientBuffers[fds[i].fd].find("\n")) != std::string::npos) {
                     std::string command = clientBuffers[fds[i].fd].substr(0, pos);
-                    clientBuffers[fds[i].fd].erase(0, pos + 1); // Remove the processed command from buffer
-
-                    // Now that a full command has been received, process it
-                    processClientMessage(fds[i].fd, command);
+                    processClientMessage(fds[i].fd, command); // Process complete command
+                    clientBuffers[fds[i].fd].erase(0, pos + 1); // Remove processed command
                 }
             } else if (nbytes == 0) {
-                // Handle client disconnection
-                handleClientDisconnection(i);
+                handleClientDisconnection(i); // Handle disconnection
             } else {
-                // Error handling remains unchanged
-                // Removed specific errno handling based on requirements
+                // Error handling remains unchanged (no specific errno handling)
             }
         }
     }
@@ -153,4 +149,5 @@ void Server::handleClientDisconnection(int clientIndex) {
         fds[j] = fds[j + 1];
     }
     nfds--; 
+    clientBuffers.erase(clientFd); 
 }
