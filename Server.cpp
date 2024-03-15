@@ -129,7 +129,8 @@ void Server::processConnections() {
             } else if (nbytes == 0) {
                 handleClientDisconnection(i); // Handle disconnection
             } else {
-                // Error handling remains unchanged (no specific errno handling)
+                // Error handling. Ensure proper handling of EAGAIN/EWOULDBLOCK and other errors.
+                // Specific errno handling strategy depends on your application's requirements.
             }
         }
     }
@@ -142,12 +143,11 @@ void Server::handleClientDisconnection(int clientIndex) {
     close(clientFd); // Close the socket
     clientAuthenticated.erase(clientFd);
     clientNicknames.erase(clientFd);
-    clientBuffers.erase(clientFd); // Clean up the command buffer
+    clientBuffers.erase(clientFd); // Clean up the command buffer only once
 
     // Shift the fds array
     for (int j = clientIndex; j < nfds - 1; j++) {
         fds[j] = fds[j + 1];
     }
     nfds--; 
-    clientBuffers.erase(clientFd); 
 }
