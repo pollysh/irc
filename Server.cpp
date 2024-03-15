@@ -129,7 +129,7 @@ void Server::processConnections() {
             } else if (nbytes == 0) {
                 handleClientDisconnection(i); // Handle disconnection
             } else {
-                 continue;
+                // Error handling remains unchanged (no specific errno handling)
             }
         }
     }
@@ -142,11 +142,12 @@ void Server::handleClientDisconnection(int clientIndex) {
     close(clientFd); // Close the socket
     clientAuthenticated.erase(clientFd);
     clientNicknames.erase(clientFd);
-    clientBuffers.erase(clientFd); // Clean up the command buffer only once
+    clientBuffers.erase(clientFd); // Clean up the command buffer
 
     // Shift the fds array
     for (int j = clientIndex; j < nfds - 1; j++) {
         fds[j] = fds[j + 1];
     }
     nfds--; 
+    clientBuffers.erase(clientFd); 
 }
