@@ -129,8 +129,7 @@ void Server::processConnections() {
             } else if (nbytes == 0) {
                 handleClientDisconnection(i); // Handle disconnection
             } else {
-                // Error handling. Ensure proper handling of EAGAIN/EWOULDBLOCK and other errors.
-                // Specific errno handling strategy depends on your application's requirements.
+                 break;
             }
         }
     }
